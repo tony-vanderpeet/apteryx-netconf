@@ -3,6 +3,7 @@
 apteryx-netconf
 host.key
 host.key.pub
+.build/
 
 # Autotools
 m4/

@@ -1,0 +1,95 @@
+module test {
+  namespace "https://github.com/alliedtelesis/apteryx";
+  prefix test;
+
+  organization
+    "The organization name";
+
+  revision 2018-02-20 {
+    description
+      "Updated to support revisions.";
+  }
+  revision 2014-05-08 {
+    description
+      "Original version";
+    reference
+      "RFC 6020 - YANG - A Data Modeling Language for the Network Configuration Protocol (NETCONF)";
+  }
+
+  container test {
+    description
+      "This is a test node";
+    leaf debug {
+      description
+        "Debug configuration";
+      default "disable";
+      type enumeration {
+        enum disable {
+          value 0;
+          description
+            "Debugging is disabled";
+        }
+        enum enable {
+          value 1;
+          description
+            "Debugging is enabled";
+        }
+      }
+    }
+    leaf counter {
+      type uint32;
+      default "0";
+      description
+        "uint32";
+    }
+    leaf enable {
+      type boolean;
+      default "false";
+      description
+        "boolean";
+    }
+    list list {
+      key "name";
+      description
+        "This is a list of stuff";
+      leaf name {
+        description
+          "This is the list key";
+        type string;
+      }
+      leaf type {
+        description
+          "This is the list type";
+        default "big";
+        type enumeration {
+          enum big {
+            value 1;
+          }
+          enum little {
+            value 2;
+          }
+        }
+      }
+      list sub-list {
+        key "i-d";
+        description
+          "This is a list of stuff attached to a list";
+        leaf i-d {
+          description
+            "This is the sublist key";
+          type string;
+        }
+      }
+    }
+    leaf-list trivial-string-list {
+      description
+        "This is a simple list of strings";
+      type string;
+    }
+    leaf-list trivial-int-list {
+      description
+        "This is a simple list of integers";
+      type uint32;
+    }
+  }
+}

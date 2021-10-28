@@ -13,10 +13,10 @@ m = manager.connect(host='localhost',
 try:
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <system xmlns="http://openconfig.net/yang/system">
-    <name>Alfred</name>
-    <arch>x86_64</arch>
-  </system>
+  <test xmlns="https://github.com/alliedtelesis/apteryx">
+    <debug>enable</debug>
+    <counter>33</counter>
+  </test>
 </config>
 """
     response = m.edit_config(target='running', config=payload).xml

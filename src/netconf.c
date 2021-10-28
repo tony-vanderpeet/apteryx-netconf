@@ -526,13 +526,36 @@ op_delete (struct lyd_node *rpc, struct nc_session *ncs)
     return nc_server_reply_err (e);
 }
 
+static void *
+handle_session (void *arg)
+{
+    struct nc_pollsession *ps = (struct nc_pollsession *) arg;
+    int rc;
+
+    while (1)
+    {
+        rc = nc_ps_poll (ps, 5000, NULL);
+        VERBOSE ("NETCONF: Session polling (rc=0x%x)\n", rc);
+        if (rc & NC_PSPOLL_SESSION_TERM)
+        {
+            break;
+        }
+        //TODO - handle all the other returns!
+    }
+    VERBOSE ("NETCONF: session terminated\n");
+    nc_ps_clear (ps, 0, NULL);
+    //TODO - nc_ps_del_session (ps, ncs);
+}
+
 /* Thread for handling client connections */
 static gpointer
 netconf_accept_thread (gpointer data)
 {
+    GThreadPool *workers = g_thread_pool_new ((GFunc)handle_session, NULL, -1, FALSE, NULL);
     struct nc_session *ncs;
     NC_MSG_TYPE msgtype;
 
+    usleep (1000000);
     while (g_main_loop_is_running (g_loop))
     {
         msgtype = nc_accept (500, &ncs);
@@ -540,27 +563,25 @@ netconf_accept_thread (gpointer data)
             continue;
         if (NC_MSG_HELLO)
         {
-            VERBOSE ("NETCONF: New session\n");
             struct nc_pollsession *ps;
-            int ret;
 
+            VERBOSE ("NETCONF: New session\n");
             ps = nc_ps_new ();
             nc_ps_add_session (ps, ncs);
-            ret = nc_ps_poll (ps, 5000, NULL);
-            VERBOSE ("NETCONF: ret: %d\n", ret);
-            nc_ps_clear (ps, 0, NULL);
+            g_thread_pool_push (workers, ps, NULL);
         }
         else
         {
             VERBOSE ("NETCONF: msg type %d ignored\n", msgtype);
         }
     }
+    g_thread_pool_free (workers, true, false);
     return NULL;
 }
 
 static int
-default_hostkey_clb (const char *name, void *user_data,
-                     char **privkey_path, char **privkey_data, int *privkey_data_rsa)
+default_hostkey_clb (const char *name, void *user_data, char **privkey_path,
+                     char **privkey_data, NC_SSH_KEY_TYPE *privkey_type)
 {
     if (g_strcmp0 (name, "default") == 0)
     {
