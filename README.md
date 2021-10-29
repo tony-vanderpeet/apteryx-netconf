@@ -35,8 +35,8 @@ apteryxd -b
 apteryx -s /system/name alfred
 apteryx -s /system/arch x86_64
 apteryx-netconf -v --unix /tmp/apteryx-netconf --models models/
-echo "Subsystem netconf exec socat STDIO UNIX:/tmp/apteryx-netconf" > $BUILD/sshd_config
-systemctl restart ssh
+echo "Subsystem netconf exec socat STDIO UNIX:/tmp/apteryx-netconf" >> /etc/ssh/sshd_config
+systemctl restart sshd
 ```
 
 ## Examples
