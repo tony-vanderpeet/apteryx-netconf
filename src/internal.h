@@ -52,7 +52,7 @@ extern gboolean apteryx_netconf_verbose;
 /* Main loop */
 extern GMainLoop *g_loop;
 
-gboolean netconf_init (const char *path, int port, const char *key, const char *cp,
+gboolean netconf_init (const char *path, int port, const char *unix_path, const char *cp,
                        const char *rm);
 gboolean netconf_shutdown (void);
 

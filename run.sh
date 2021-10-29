@@ -40,20 +40,6 @@ if [ ! -f libyang/build/libyang.so ]; then
         cd $BUILD
 fi
 
-# Check libssh
-if [ ! -d libssh ]; then
-        echo "Building libssh from source."
-        git clone --depth 1 https://git.libssh.org/projects/libssh.git
-        rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
-fi
-if [ ! -f libssh/build/lib/libssh.so ]; then
-        cd libssh; mkdir build; cd build
-        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DGLOBAL_BIND_CONFIG=./libssh_server_config ..
-        make install DESTDIR=$BUILD
-        rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
-        cd $BUILD
-fi
-
 # Check libnetconf2
 if [ ! -d libnetconf2 ]; then
         echo "Building libnetconf2 from source."
@@ -62,19 +48,44 @@ if [ ! -d libnetconf2 ]; then
 fi
 if [ ! -f libnetconf2/build/libnetconf2.so ]; then
         cd libnetconf2; mkdir -p build; cd build
-        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INCLUDE_PATH=$BUILD/usr/include -DCMAKE_LIBRARY_PATH=$BUILD/usr/lib/ ..
+        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INCLUDE_PATH=$BUILD/usr/include \
+            -DCMAKE_LIBRARY_PATH=$BUILD/usr/lib/ -DENABLE_TLS=OFF -DENABLE_SSH=OFF -DENABLE_DNSSEC=OFF ..
         make install DESTDIR=$BUILD
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
         cd $BUILD
 fi
 
+# Check openssh
+if [ ! -d openssh ]; then
+        echo "Building openssh from source."
+        git clone --depth 1 --branch V_8_8_P1 git://anongit.mindrot.org/openssh.git
+        rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
+fi
+if [ ! -f openssh/sshd ]; then
+        cd openssh
+        autoreconf -fvi
+        ./configure --prefix=/usr --with-privsep-path=$BUILD/empty --with-privsep-user=manager
+        make install-nokeys DESTDIR=$BUILD
+        rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
+        cd $BUILD
+        mkdir -p $BUILD/empty
+        chmod 755 $BUILD/empty
+        sudo chown root:sys $BUILD/empty
+fi
+if [ ! -f $BUILD/ssh_host_rsa_key ]; then
+    $BUILD/usr/bin/ssh-keygen -b 2048 -t rsa -f $BUILD/ssh_host_rsa_key -q -N ""
+fi
+echo -e "
+HostKey $BUILD/ssh_host_rsa_key
+HostKeyAlgorithms ssh-rsa,ssh-dss
+Port 830
+Subsystem netconf exec socat STDIO UNIX:$BUILD/apteryx-netconf
+" > $BUILD/sshd_config
+
 # Build
-# export PKG_CONFIG_SYSROOT_DIR=$BUILD
 export CFLAGS=-I$BUILD/usr/include
-export LDFLAGS="-L$BUILD/usr/lib -lssh"
+export LDFLAGS=-L$BUILD/usr/lib
 export PKG_CONFIG_PATH=$BUILD/usr/lib/pkgconfig
-# export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
-# export PKG_CONFIG_LIBDIR=$BUILD/usr/lib/pkgconfig
 if [ ! -f $BUILD/../Makefile ]; then
     cd $BUILD/../
     ./autogen.sh
@@ -85,12 +96,6 @@ fi
 make -C $BUILD/../
 rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 
-# Generate host key id needed
-if [ ! -f $BUILD/ssh_host_rsa_key ]; then
-    ssh-keygen -b 2048 -t rsa -f $BUILD/ssh_host_rsa_key -q -N ""
-fi
-echo "hostkeyalgorithms ssh-rsa" > $BUILD/libssh_server_config
-
 # Start Apteryx and populate the database
 export LD_LIBRARY_PATH=$BUILD/usr/lib
 $BUILD/usr/bin/apteryxd -b
@@ -98,14 +103,23 @@ $BUILD/usr/bin/apteryx -s /test/debug enable
 $BUILD/usr/bin/apteryx -s /test/counter 42
 $BUILD/usr/bin/apteryx -s /test/enable true
 
+# Start sshd
+sudo useradd -M -p $(perl -e 'print crypt($ARGV[0], "password")' 'friend') manager
+sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
+
 # Start restconf
 sudo LD_LIBRARY_PATH=$BUILD/usr/lib \
-LIBYANG_EXTENSIONS_PLUGINS_DIR=$BUILD/usr/lib/libyang1/extensions \
-LIBYANG_USER_TYPES_PLUGINS_DIR=$BUILD/src/user_types \
-../src/apteryx-netconf -v --key $BUILD/ssh_host_rsa_key --models $BUILD/../models/
+    LIBYANG_EXTENSIONS_PLUGINS_DIR=$BUILD/usr/lib/libyang1/extensions \
+    LIBYANG_USER_TYPES_PLUGINS_DIR=$BUILD/src/user_types \
+    ../src/apteryx-netconf -v --unix $BUILD/apteryx-netconf --models $BUILD/../models/
+rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 
 # Stop restconf
 sudo killall apteryx-netconf
+sudo rm /tmp/apteryx-netconf
+# Stop sshd
+sudo kill `pidof $BUILD/usr/sbin/sshd`
+sudo userdel manager
 # Stop Apteryx
 $BUILD/usr/bin/apteryx -t
 killall apteryxd

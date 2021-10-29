@@ -598,7 +598,7 @@ passwd_auth_clb (const struct nc_session *session, const char *password, void *u
 }
 
 gboolean
-netconf_init (const char *path, int port, const char *key, const char *cp, const char *rm)
+netconf_init (const char *path, int port, const char *unix_path, const char *cp, const char *rm)
 {
     const struct lys_module *mod;
     const struct lys_node *snode;
@@ -607,17 +607,14 @@ netconf_init (const char *path, int port, const char *key, const char *cp, const
     if (apteryx_netconf_verbose)
     {
         nc_verbosity (NC_VERB_DEBUG);
-        nc_libssh_thread_verbosity (4);
     }
     else if (apteryx_netconf_debug)
     {
         nc_verbosity (NC_VERB_VERBOSE);
-        nc_libssh_thread_verbosity (2);
     }
     else
     {
         nc_verbosity (NC_VERB_ERROR);
-        nc_libssh_thread_verbosity (1);
     }
     nc_set_print_clb (log_cb);
 
@@ -655,30 +652,11 @@ netconf_init (const char *path, int port, const char *key, const char *cp, const
     }
 
     /* Set server options */
-    if (nc_server_add_endpt ("main", NC_TI_LIBSSH))
+    if (nc_server_add_endpt ("unix", NC_TI_UNIX) ||
+        nc_server_endpt_set_perms ("unix", S_IRWXO, -1, -1) ||
+        nc_server_endpt_set_address ("unix", unix_path))
     {
         ERROR ("NETCONF: Failed to create server endpoint\n");
-        return false;
-    }
-    if (nc_server_endpt_set_address ("main", "0.0.0.0"))
-    {
-        ERROR ("NETCONF: Failed to configure server address\n");
-        return false;
-    }
-    if (nc_server_endpt_set_port ("main", port))
-    {
-        ERROR ("NETCONF: Failed to set server port\n");
-        return false;
-    }
-    nc_server_ssh_set_hostkey_clb (default_hostkey_clb, (void *) key, NULL);
-    if (nc_server_ssh_endpt_add_hostkey ("main", "default", -1))
-    {
-        ERROR ("NETCONF: Failed to add server hostkey\n") return false;
-    }
-    nc_server_ssh_set_passwd_auth_clb (passwd_auth_clb, NULL, NULL);
-    if (nc_server_ssh_endpt_set_auth_methods ("main", NC_SSH_AUTH_PASSWORD))
-    {
-        ERROR ("NETCONF: Failed to set server authentication\n");
         return false;
     }
 

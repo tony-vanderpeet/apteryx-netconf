@@ -25,17 +25,18 @@ Application Options:
   -d, --debug       Debug
   -v, --verbose     Verbose
   -m, --models      Path to yang models(defaults to "./")
-  -k, --key         Path to SSH host key (defaults to "./host.key")
+  -u, --unix        Listen on unix socket (defaults to "/tmp/apteryx-netconf")
   -c, --copy        BASH command to run to copy running->startup
   -r, --remove      BASH command to run to remove startup config
 ```
 
 ```bash
-ssh-keygen -b 2048 -t rsa -f host.key -q -N ""
 apteryxd -b
 apteryx -s /system/name alfred
 apteryx -s /system/arch x86_64
-apteryx-netconf -v --key host.key --models models/ --copy "echo copy-running-startup" --remove "echo remove-startup"
+apteryx-netconf -v --unix /tmp/apteryx-netconf --models models/
+echo "Subsystem netconf exec socat STDIO UNIX:/tmp/apteryx-netconf" > $BUILD/sshd_config
+systemctl restart ssh
 ```
 
 ## Examples

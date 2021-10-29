@@ -22,7 +22,7 @@
 gboolean apteryx_netconf_debug = FALSE;
 gboolean apteryx_netconf_verbose = FALSE;
 static gchar *models_path = "./";
-static gchar *host_key = "./host.key";
+static gchar *unix_path = "/tmp/apteryx-netconf";
 static gchar *cp_cmd = NULL;
 static gchar *rm_cmd = NULL;
 GMainLoop *g_loop = NULL;
@@ -39,7 +39,7 @@ static GOptionEntry entries[] = {
     {"debug", 'd', 0, G_OPTION_ARG_NONE, &apteryx_netconf_debug, "Debug", NULL},
     {"verbose", 'v', 0, G_OPTION_ARG_NONE, &apteryx_netconf_verbose, "Verbose", NULL},
     {"models", 'm', 0, G_OPTION_ARG_STRING, &models_path, "Path to yang models(defaults to \"./\")", NULL},
-    {"key", 'k', 0, G_OPTION_ARG_STRING, &host_key, "Path to SSH host key (defaults to \"./host.key\")", NULL},
+    {"unix", 'u', 0, G_OPTION_ARG_STRING, &unix_path, "Listen on unix socket (defaults to /tmp/apteryx-netconf)", NULL},
     {"copy", 'c', 0, G_OPTION_ARG_STRING, &cp_cmd, "BASH command to run to copy running->startup", NULL},
     {"remove", 'r', 0, G_OPTION_ARG_STRING, &rm_cmd, "BASH command to run to remove startup config", NULL},
     {NULL}
@@ -62,7 +62,7 @@ main (int argc, char *argv[])
 
     /* Initialization */
     apteryx_init (apteryx_netconf_verbose);
-    if (!netconf_init (models_path, 830, host_key, cp_cmd, rm_cmd))
+    if (!netconf_init (models_path, 830, unix_path, cp_cmd, rm_cmd))
     {
         return EXIT_FAILURE;
     }
