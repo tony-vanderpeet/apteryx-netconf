@@ -83,7 +83,7 @@ Subsystem netconf exec socat STDIO UNIX:$BUILD/apteryx-netconf
 " > $BUILD/sshd_config
 
 # Build
-export CFLAGS=-I$BUILD/usr/include
+export CFLAGS="-g -Wall -Werror -I$BUILD/usr/include"
 export LDFLAGS=-L$BUILD/usr/lib
 export PKG_CONFIG_PATH=$BUILD/usr/lib/pkgconfig
 if [ ! -f $BUILD/../Makefile ]; then
@@ -99,19 +99,19 @@ rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 # Start Apteryx and populate the database
 export LD_LIBRARY_PATH=$BUILD/usr/lib
 $BUILD/usr/bin/apteryxd -b
-$BUILD/usr/bin/apteryx -s /test/debug enable
-$BUILD/usr/bin/apteryx -s /test/counter 42
-$BUILD/usr/bin/apteryx -s /test/enable true
 
 # Start sshd
 sudo useradd -M -p $(perl -e 'print crypt($ARGV[0], "password")' 'friend') manager
 sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 
 # Start restconf
+# TEST_WRAPPER="gdb --args"
+# TEST_WRAPPER="valgrind --leak-check=full"
+# TEST_WRAPPER="valgrind --tool=cachegrind"
 sudo LD_LIBRARY_PATH=$BUILD/usr/lib \
     LIBYANG_EXTENSIONS_PLUGINS_DIR=$BUILD/usr/lib/libyang1/extensions \
     LIBYANG_USER_TYPES_PLUGINS_DIR=$BUILD/src/user_types \
-    ../src/apteryx-netconf -v --unix $BUILD/apteryx-netconf --models $BUILD/../models/
+    $TEST_WRAPPER ../src/apteryx-netconf -v --unix $BUILD/apteryx-netconf --models $BUILD/../models/
 rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 
 # Stop restconf

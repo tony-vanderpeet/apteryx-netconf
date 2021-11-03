@@ -18,6 +18,7 @@
  * along with this library. If not, see <http://www.gnu.org/licenses/>
  */
 #include "internal.h"
+#include <fnmatch.h>
 #include <libyang/libyang.h>
 #include <nc_server.h>
 
@@ -46,116 +47,255 @@ log_cb (NC_VERB_LEVEL level, const char *msg)
     }
 }
 
-/* Convert a netconf xpath to Apteryx tree */
-static GNode *
-xpath_to_tree (const char *xpath)
+static struct lyd_node*
+new_lyd_node(struct lyd_node *parent, struct lys_module **module, const char *name)
 {
-    GNode *node;
-    GNode *leaf;
+    struct lys_node *schema;
+    struct lys_node *child;
+    struct lyd_node* new_node = NULL;
 
-    //TODO support real xpaths
-    //TODO when to wildcard path (e.g. '*')
-    node = g_node_new (g_strdup ("/"));
-    leaf = apteryx_path_to_node (node, xpath, NULL);
-    if (leaf == NULL)
-    {
-        g_node_destroy (node);
-        node = NULL;
+    if (parent == NULL) {
+        new_node = lyd_new (parent, *module, name);
+        return new_node;
     }
 
-    return node;
-}
-
-/* Convert a libnetconf XML tree to Apteryx tree */
-static GNode *
-xml_to_tree (struct lyxml_elem *xml, int depth)
-{
-    GNode *node;
-    char *name;
-
-    /* Parse the node name */
-    if (depth == 0)
-        name = g_strdup_printf ("/%s", xml->name);
-    else
-        name = g_strdup (xml->name);
-
-    /* Leaf */
-    if (xml->content && xml->content[0] != 0)
-    {
-        VERBOSE ("%*s%s = %s\n", depth * 2, " ", name, xml->content);
-        node = APTERYX_NODE (NULL, name);
-        APTERYX_NODE (node, g_strdup (xml->content));
-        return node;
-    }
-
-    /* Create a node */
-    VERBOSE ("%*s%s\n", depth * 2, " ", name);
-    node = APTERYX_NODE (NULL, name);
-
-    /* Process children */
-    for (struct lyxml_elem * child = xml->child; child; child = child->next)
-    {
-        GNode *cn = xml_to_tree (child, depth + 1);
-        if (cn)
-            g_node_append (node, cn);
-    }
-
-    return node;
-}
-
-/* Convert an Apteryx tree to libnetconf XML tree */
-struct lyxml_elem *
-tree_to_xml (GNode * node, int depth)
-{
-    struct lyxml_elem *xml;
-    char *name;
-
-    /* Create the node */
-    if (depth == 0 && strlen (APTERYX_NAME (node)) == 1)
-        return tree_to_xml (node->children, 0);
-    else if (depth == 0 && APTERYX_NAME (node)[0] == '/')
-        name = g_strdup (APTERYX_NAME (node) + 1);
-    else
-        name = g_strdup (APTERYX_NAME (node));
-    xml = calloc (1, sizeof *xml);
-    xml->name = lydict_insert (g_ctx, name, 0);
-    xml->prev = xml;
-
-    VERBOSE ("%*s%s\n", depth * 2, " ", name);
-
-    /* Store values */
-    if (APTERYX_HAS_VALUE (node))
-    {
-        xml->content = lydict_insert (g_ctx, g_strdup (APTERYX_VALUE (node)), 0);
-        return xml;
-    }
-
-    /* Process children */
-    for (GNode * child = node->children; child; child = child->next)
-    {
-        struct lyxml_elem *cn = tree_to_xml (child, depth + 1);
-        if (cn)
-        {
-            /* Add child to parent */
-            cn->parent = xml;
-            if (xml->child)
-            {
-                struct lyxml_elem *e = xml->child;
-                cn->prev = e->prev;
-                cn->next = NULL;
-                cn->prev->next = cn;
-                e->prev = cn;
+    schema = parent->schema;
+    for (child = schema->child; child; child = child->next) {
+        if (!strcmp(child->name, name)) {
+            new_node = lyd_new (parent, child->module, name);
+            if (new_node != NULL) {
+                *module = child->module;
+                break;
             }
-            else
-            {
-                xml->child = cn;
-                cn->prev = cn;
-                cn->next = NULL;
+        }
+    }
+    return new_node;
+}
+
+static struct lyd_node* 
+gnode_to_lydnode (struct lys_module *module, struct lyd_node *parent, GNode *node, int depth)
+{
+    struct lyd_node *data = NULL;
+    char *name;
+    bool adding_list = false;
+
+    VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME(node));
+
+    if (depth == 0 && strlen (APTERYX_NAME (node)) == 1) {
+        return gnode_to_lydnode(module, data, node->children, 1);
+    } else if (depth == 0 && APTERYX_NAME( node)[0] == '/') {
+        name = APTERYX_NAME (node) + 1;
+    } else {
+        name = APTERYX_NAME (node);
+    }
+
+    if (APTERYX_HAS_VALUE (node)) {
+        /* Node is a leaf, add it to the tree. */
+        data = lyd_new_leaf (parent, module, name, APTERYX_VALUE (node));
+    } else if (parent != NULL && parent->schema->nodetype == LYS_LIST) {
+        /* Node is a list key, just skip it. */
+        data = parent;
+    } else {
+        data = new_lyd_node (parent, &module, name);
+        if (data && data->schema->nodetype == LYS_LIST) {
+            adding_list = true;
+        }
+    }
+    if (node->children) {
+        apteryx_sort_children (node, g_strcmp0);
+        for (GNode *child = node->children; child; child = child->next) {
+            gnode_to_lydnode (module, data, child, depth + 1);
+            if (adding_list && child->next != NULL) {
+                data = new_lyd_node (parent, &module, name);
             }
         }
     }
 
-    return xml;
+    return data;
+}
+
+static GNode *
+xpath_to_query (const struct lys_module *module, const struct lys_node *yang, const char *xpath, int depth)
+{
+    const char *next;
+    GNode *node = NULL;
+    GNode *rnode = NULL;
+    GNode *child = NULL;
+    char *name;
+    char *pred;
+
+    if (xpath && xpath[0] == '/')
+    {
+        xpath++;
+
+        /* Find name */
+        next = strchr (xpath, '/');
+        if (next)
+            name = strndup (xpath, next - xpath);
+        else
+            name = strdup (xpath);
+        pred = strchr (name, '[');
+        if (pred) {
+            char *temp = strndup (name, pred - name);
+            pred = strdup (pred);
+            g_free (name);
+            name = temp;
+        }
+
+        /* Find schema node */
+        if (!yang)
+            yang = lys_getnext (NULL, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+        while (yang) {
+            if (g_strcmp0 (yang->name, name) == 0) {
+                break;
+            }
+            yang = lys_getnext (yang, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+        }
+        if (yang == NULL) {
+            ERROR ("ERROR: No match for %s\n", name);
+            g_free (name);
+            g_free (pred);
+            return NULL;
+        }
+
+        /* Create node */
+        if (depth == 0) {
+            rnode = APTERYX_NODE (NULL, g_strdup_printf ("/%s", name));
+            g_free (name);
+        }
+        else
+            rnode = APTERYX_NODE (NULL, name);
+        VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (rnode));
+
+        /* TODO - properly parse predicates */
+        if (pred && yang->nodetype == LYS_LIST) {
+            char key[128 + 1];
+            char value[128 + 1];
+
+            if (sscanf (pred, "[%128[^=]='%128[^']']", key, value) == 2) {
+                // TODO make sure this key is the list key
+                child = APTERYX_NODE (NULL, g_strdup (value));
+                g_node_prepend (rnode, child);
+                depth++;
+                VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
+            }
+            g_free (pred);
+        }
+
+        if (next) {
+            node = xpath_to_query (module, yang->child, next, depth + 1);
+            if (!node) {
+                g_node_destroy (rnode);
+                return NULL;
+            }
+            g_node_prepend (child ?: rnode, node);
+        }
+        else if (yang->child) {
+            /* Get everything from here down if we do not already have a star */
+            if (child && g_strcmp0 (APTERYX_NAME (child), "*") != 0) {
+                APTERYX_NODE (child, g_strdup ("*"));
+                VERBOSE ("%*s%s\n", (depth + 1) * 2, " ", "*");
+            }
+            else if (g_strcmp0 (APTERYX_NAME (rnode), "*") != 0) {
+                APTERYX_NODE (rnode, g_strdup ("*"));
+                VERBOSE ("%*s%s\n", (depth + 1) * 2, " ", "*");
+            }
+        }
+    }
+
+    return rnode;
+}
+
+static GNode*
+xml_to_gnode(const struct lys_module *module, const struct lys_node *yang, struct lyxml_elem *xml, int depth, bool query)
+{
+    GNode *tree = NULL;
+    GNode *node = NULL;
+
+    /* Find schema node */
+    if (!yang)
+        yang = lys_getnext (NULL, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+    while (yang) {
+        if (g_strcmp0 (yang->name, xml->name) == 0) {
+            break;
+        }
+        yang = lys_getnext (yang, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+    }
+    if (yang == NULL) {
+        ERROR ("ERROR: No match for %s\n", xml->name);
+        return NULL;
+    }
+
+    /* Create a node */
+    if (depth == 0) {
+        // VERBOSE ("%*s%s\n", depth * 2, " ", "/");
+        // depth++;
+        // VERBOSE ("%*s%s\n", depth * 2, " ", xml->name);
+        // tree = APTERYX_NODE (NULL, g_strdup ("/"));
+        // node = APTERYX_NODE (tree, g_strdup (xml->name));
+        VERBOSE ("%*s/%s\n", depth * 2, " ", xml->name);
+        tree = node = APTERYX_NODE (NULL, g_strdup_printf ("/%s", xml->name));
+    }
+    else if (yang->nodetype == LYS_LIST) {
+        VERBOSE ("%*s%s\n", depth * 2, " ", xml->name);
+        depth++;
+        tree = APTERYX_NODE (NULL, g_strdup (xml->name));
+        if (xml->child && xml->child->content && strlen (xml->child->content) != 0) {
+            // TODO make sure this key is the list key
+            node = APTERYX_NODE (tree, g_strdup (xml->child->content));
+            if (query)
+                xml = xml->child;
+        }
+        else if (query && xml->attr) {
+            // TODO make sure this key is the list key
+            node = APTERYX_NODE (tree, g_strdup (xml->attr->value));
+        }
+        else {
+            node = APTERYX_NODE (tree, g_strdup ("*"));
+        }
+        VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
+    }
+    else if (yang->nodetype == LYS_LEAF) {
+        tree = APTERYX_NODE (NULL, g_strdup (xml->name));
+        if (xml->attr && g_strcmp0 (xml->attr->name , "operation") == 0 && g_strcmp0 (xml->attr->value, "delete") == 0) {
+            APTERYX_NODE (tree, g_strdup (""));
+            VERBOSE ("%*s%s = NULL\n", depth * 2, " ", xml->name);
+        }
+        else if (xml->content && strlen (xml->content) != 0) {
+            APTERYX_NODE (tree, g_strdup (xml->content));
+            VERBOSE ("%*s%s = %s\n", depth * 2, " ", xml->name, xml->content);
+        }
+        return tree;
+    }
+    else {
+        VERBOSE ("%*s%s\n", depth * 2, " ", xml->name);
+        tree = node = APTERYX_NODE (NULL, g_strdup_printf ("%s", xml->name));
+    }
+
+    /* Process children */
+    if (xml->child) {
+        yang = yang->child;
+        for (struct lyxml_elem *child = xml->child; child; child = child->next)
+        {
+            GNode *cn = xml_to_gnode (module, yang, child, depth + 1, query);
+            if (!cn) {
+                ERROR ("ERROR: No child match for %s\n", child->name);
+                apteryx_free_tree (tree);
+                return NULL;
+            }
+            g_node_append (node, cn);
+        }
+    }
+    else if (yang->child && g_strcmp0 (APTERYX_NAME (node), "*") != 0) {
+        /* Get everything from here down */
+        if (node)
+            APTERYX_NODE (node, g_strdup ("*"));
+        else
+            APTERYX_NODE (tree, g_strdup ("*"));
+        VERBOSE ("%*s%s\n", (depth + 1) * 2, " ", "*");
+    }
+
+    return tree;
 }
 
 /* Find an attribute */
@@ -176,14 +316,14 @@ get_attr (struct lyd_node *node, const char *name)
 static struct nc_server_reply *
 op_get (struct lyd_node *rpc, struct nc_session *ncs)
 {
+    struct lys_module *module = (struct lys_module *) ly_ctx_get_module (g_ctx, "test", NULL, 0); // TODO
     NC_WD_MODE nc_wd;
     struct ly_set *nodeset;
     struct lyd_node *node;
-    struct lyxml_elem *xml = NULL;
     struct nc_server_error *e;
     char *msg = NULL;
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
-    GNode *query;
+    GNode *query = NULL;
     GNode *tree;
 
     DEBUG ("NETCONF: %s\n", rpc->schema->name);
@@ -221,7 +361,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
                 err = NC_ERR_MISSING_ATTR;
                 goto error;
             }
-            query = xpath_to_tree (path);
+            query = xpath_to_query (module, NULL, path, 0);
         }
         else if (g_strcmp0 (type, "subtree") == 0)
         {
@@ -252,7 +392,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
                     goto error;
                 }
             }
-            query = xml_to_tree (xml, 0);
+            query = xml_to_gnode (module, NULL, xml, 0, true);
         }
         else
         {
@@ -292,12 +432,12 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
     //TODO - with-defaults 
 
     /* Convert result to XML */
-    xml = tree ? tree_to_xml (tree, 0) : NULL;
+    node = tree ? gnode_to_lydnode (module, NULL, tree, 0) : NULL;
     apteryx_free_tree (tree);
 
     /* Send response */
-    node = lyd_new_path (NULL, g_ctx, "/ietf-netconf:get/data", xml,
-                         LYD_ANYDATA_XML, LYD_PATH_OPT_OUTPUT);
+    node = lyd_new_path (NULL, g_ctx, "/ietf-netconf:get/data", node,
+                         LYD_ANYDATA_DATATREE, LYD_PATH_OPT_OUTPUT);
     return nc_server_reply_data (node, NC_WD_EXPLICIT, NC_PARAMTYPE_FREE);
 
   error:
@@ -315,6 +455,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
 static struct nc_server_reply *
 op_edit (struct lyd_node *rpc, struct nc_session *ncs)
 {
+    struct lys_module *module = (struct lys_module *) ly_ctx_get_module (g_ctx, "test", NULL, 0); // TODO
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
     struct nc_server_error *e;
     char *msg = NULL;
@@ -392,7 +533,7 @@ op_edit (struct lyd_node *rpc, struct nc_session *ncs)
         switch (any->value_type)
         {
         case LYD_ANYDATA_XML:
-            tree = xml_to_tree (any->value.xml, 0);
+            tree = xml_to_gnode (module, NULL, any->value.xml, 0, false);
             break;
         default:
             msg = g_strdup_printf ("Unsupported data type \"%d\"", any->value_type);
@@ -545,6 +686,7 @@ handle_session (void *arg)
     VERBOSE ("NETCONF: session terminated\n");
     nc_ps_clear (ps, 0, NULL);
     //TODO - nc_ps_del_session (ps, ncs);
+    return NULL;
 }
 
 /* Thread for handling client connections */
@@ -579,22 +721,37 @@ netconf_accept_thread (gpointer data)
     return NULL;
 }
 
-static int
-default_hostkey_clb (const char *name, void *user_data, char **privkey_path,
-                     char **privkey_data, NC_SSH_KEY_TYPE *privkey_type)
+static void
+list_schema_files (GList **files, const char *path)
 {
-    if (g_strcmp0 (name, "default") == 0)
-    {
-        *privkey_path = strdup ((const char *) user_data);
-        return 0;
-    }
-    return 1;
-}
+    DIR *dp;
+    struct dirent *ep;
+    char *saveptr = NULL;
+    char *cpath;
+    char *dpath;
 
-static int
-passwd_auth_clb (const struct nc_session *session, const char *password, void *user_data)
-{
-    return 0;
+    cpath = strdup (path);
+    dpath = strtok_r (cpath, ":", &saveptr);
+    while (dpath != NULL)
+    {
+        dp = opendir (dpath);
+        if (dp != NULL)
+        {
+            while ((ep = readdir (dp)))
+            {
+                if (true && fnmatch ("*.yang", ep->d_name, 0) != 0)
+                {
+                    continue;
+                }
+                *files = g_list_append (*files, g_strdup_printf ("%s/%s", dpath, ep->d_name));
+            }
+            (void) closedir (dp);
+        }
+        dpath = strtok_r (NULL, ":", &saveptr);
+    }
+    free (cpath);
+    *files = g_list_sort (*files, (GCompareFunc) strcasecmp);
+    return;
 }
 
 gboolean
@@ -602,6 +759,8 @@ netconf_init (const char *path, int port, const char *unix_path, const char *cp,
 {
     const struct lys_module *mod;
     const struct lys_node *snode;
+    GList *files = NULL;
+    GList *iter;
 
     /* Debug */
     if (apteryx_netconf_verbose)
@@ -624,8 +783,13 @@ netconf_init (const char *path, int port, const char *unix_path, const char *cp,
 
     /* Schemas */
     g_ctx = ly_ctx_new (path, 0);
-    ly_ctx_load_module (g_ctx, "ietf-netconf", NULL);
-    ly_ctx_load_module (g_ctx, "ietf-netconf-with-defaults", NULL);
+    list_schema_files (&files, path);
+    for (iter = files; iter; iter = g_list_next (iter))
+    {
+        char *filename = (char *) iter->data;
+        lys_parse_path (g_ctx, filename, LYS_IN_YANG);
+    }
+    g_list_free_full (files, free);
 
     /* Server */
     if (nc_server_init (g_ctx))

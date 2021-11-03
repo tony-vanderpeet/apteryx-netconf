@@ -39,6 +39,14 @@ echo "Subsystem netconf exec socat STDIO UNIX:/tmp/apteryx-netconf" >> /etc/ssh/
 systemctl restart sshd
 ```
 
+## Tests
+```bash
+# Build and run a local copy using openssh
+./run.sh
+# Run the unit tests using pytest
+pytest
+```
+
 ## Examples
 ```python
 from ncclient import manager
