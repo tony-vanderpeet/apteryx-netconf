@@ -28,7 +28,7 @@ fi
 # Check libyang
 if [ ! -d libyang ]; then
         echo "Building libyang from source."
-        git clone --depth 1 --branch v1.0.240 https://github.com/CESNET/libyang.git
+        git clone --depth 1 --branch v2.0.97 https://github.com/CESNET/libyang.git
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 fi
 if [ ! -f libyang/build/libyang.so ]; then
@@ -43,7 +43,7 @@ fi
 # Check libnetconf2
 if [ ! -d libnetconf2 ]; then
         echo "Building libnetconf2 from source."
-        git clone --depth 1 --branch v1.1.46 https://github.com/CESNET/libnetconf2.git
+        git clone --depth 1 --branch v2.0.19 https://github.com/CESNET/libnetconf2.git
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 fi
 if [ ! -f libnetconf2/build/libnetconf2.so ]; then
@@ -105,11 +105,10 @@ sudo useradd -M -p $(perl -e 'print crypt($ARGV[0], "password")' 'friend') manag
 sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 
 # Start restconf
-# TEST_WRAPPER="gdb --args"
+# TEST_WRAPPER="gdb -ex run --args"
 # TEST_WRAPPER="valgrind --leak-check=full"
 # TEST_WRAPPER="valgrind --tool=cachegrind"
 sudo LD_LIBRARY_PATH=$BUILD/usr/lib \
-    LIBYANG_EXTENSIONS_PLUGINS_DIR=$BUILD/usr/lib/libyang1/extensions \
     LIBYANG_USER_TYPES_PLUGINS_DIR=$BUILD/src/user_types \
     $TEST_WRAPPER ../src/apteryx-netconf -v --unix $BUILD/apteryx-netconf --models $BUILD/../models/
 rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
