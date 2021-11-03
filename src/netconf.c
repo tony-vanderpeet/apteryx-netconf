@@ -47,75 +47,8 @@ log_cb (NC_VERB_LEVEL level, const char *msg)
     }
 }
 
-static struct lyd_node*
-new_lyd_node(struct lyd_node *parent, struct lys_module **module, const char *name)
-{
-    struct lys_node *schema;
-    struct lys_node *child;
-    struct lyd_node* new_node = NULL;
-
-    if (parent == NULL) {
-        new_node = lyd_new (parent, *module, name);
-        return new_node;
-    }
-
-    schema = parent->schema;
-    for (child = schema->child; child; child = child->next) {
-        if (!strcmp(child->name, name)) {
-            new_node = lyd_new (parent, child->module, name);
-            if (new_node != NULL) {
-                *module = child->module;
-                break;
-            }
-        }
-    }
-    return new_node;
-}
-
-static struct lyd_node* 
-gnode_to_lydnode (struct lys_module *module, struct lyd_node *parent, GNode *node, int depth)
-{
-    struct lyd_node *data = NULL;
-    char *name;
-    bool adding_list = false;
-
-    VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME(node));
-
-    if (depth == 0 && strlen (APTERYX_NAME (node)) == 1) {
-        return gnode_to_lydnode(module, data, node->children, 1);
-    } else if (depth == 0 && APTERYX_NAME( node)[0] == '/') {
-        name = APTERYX_NAME (node) + 1;
-    } else {
-        name = APTERYX_NAME (node);
-    }
-
-    if (APTERYX_HAS_VALUE (node)) {
-        /* Node is a leaf, add it to the tree. */
-        data = lyd_new_leaf (parent, module, name, APTERYX_VALUE (node));
-    } else if (parent != NULL && parent->schema->nodetype == LYS_LIST) {
-        /* Node is a list key, just skip it. */
-        data = parent;
-    } else {
-        data = new_lyd_node (parent, &module, name);
-        if (data && data->schema->nodetype == LYS_LIST) {
-            adding_list = true;
-        }
-    }
-    if (node->children) {
-        apteryx_sort_children (node, g_strcmp0);
-        for (GNode *child = node->children; child; child = child->next) {
-            gnode_to_lydnode (module, data, child, depth + 1);
-            if (adding_list && child->next != NULL) {
-                data = new_lyd_node (parent, &module, name);
-            }
-        }
-    }
-
-    return data;
-}
-
 static GNode *
-xpath_to_query (const struct lys_module *module, const struct lys_node *yang, const char *xpath, int depth)
+xpath_to_query (const struct lys_module *module, const struct lysc_node *yang, const char *xpath, int depth)
 {
     const char *next;
     GNode *node = NULL;
@@ -144,12 +77,12 @@ xpath_to_query (const struct lys_module *module, const struct lys_node *yang, co
 
         /* Find schema node */
         if (!yang)
-            yang = lys_getnext (NULL, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+            yang = lys_getnext (NULL, NULL, module->compiled, 0);
         while (yang) {
             if (g_strcmp0 (yang->name, name) == 0) {
                 break;
             }
-            yang = lys_getnext (yang, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+            yang = lys_getnext (yang, NULL, module->compiled, 0);
         }
         if (yang == NULL) {
             ERROR ("ERROR: No match for %s\n", name);
@@ -183,14 +116,14 @@ xpath_to_query (const struct lys_module *module, const struct lys_node *yang, co
         }
 
         if (next) {
-            node = xpath_to_query (module, yang->child, next, depth + 1);
+            node = xpath_to_query (module, lysc_node_child (yang), next, depth + 1);
             if (!node) {
                 g_node_destroy (rnode);
                 return NULL;
             }
             g_node_prepend (child ?: rnode, node);
         }
-        else if (yang->child) {
+        else if (lysc_node_child (yang)) {
             /* Get everything from here down if we do not already have a star */
             if (child && g_strcmp0 (APTERYX_NAME (child), "*") != 0) {
                 APTERYX_NODE (child, g_strdup ("*"));
@@ -206,121 +139,176 @@ xpath_to_query (const struct lys_module *module, const struct lys_node *yang, co
     return rnode;
 }
 
-static GNode*
-xml_to_gnode(const struct lys_module *module, const struct lys_node *yang, struct lyxml_elem *xml, int depth, bool query)
+static struct lyd_node* 
+gnode_to_lydnode (struct lys_module *module, const struct lysc_node *schema, struct lyd_node *parent, GNode *node, int depth)
 {
+    struct lyd_node *data = NULL;
+    char *name;
+
+    /* Get the actual node name */
+    if (depth == 0 && strlen (APTERYX_NAME (node)) == 1) {
+        return gnode_to_lydnode(module, schema, parent, node->children, 1);
+    } else if (depth == 0 && APTERYX_NAME( node)[0] == '/') {
+        name = APTERYX_NAME (node) + 1;
+    } else {
+        name = APTERYX_NAME (node);
+    }
+
+    /* Find schema node */
+    if (!schema)
+        schema = lys_getnext (NULL, NULL, module->compiled, 0);
+    while (schema) {
+        if (g_strcmp0 (schema->name, name) == 0) {
+            break;
+        }
+        schema = lys_getnext (schema, NULL, module->compiled, 0);
+    }
+    if (schema == NULL) {
+        ERROR ("ERROR: No match for %s\n", name);
+        return NULL;
+    }
+
+    /* We add list keys when we create the list */
+    if (lysc_is_key(schema) && schema->nodetype == LYS_LEAF && APTERYX_HAS_VALUE (node)) {
+        return NULL;
+    }
+
+    switch (schema->nodetype) {
+        case LYS_CONTAINER:
+            VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME(node));
+            lyd_new_inner(parent, module, name, 0, &data);
+            apteryx_sort_children (node, g_strcmp0);
+            for (GNode *child = node->children; child; child = child->next) {
+                gnode_to_lydnode (module, lysc_node_child (schema), data, child, depth + 1);
+            }
+            break;
+        case LYS_LIST:
+            apteryx_sort_children (node, g_strcmp0);
+            for (GNode *child = node->children; child; child = child->next) {
+                VERBOSE ("%*s%s[%s]\n", depth * 2, " ", APTERYX_NAME(node), APTERYX_NAME(child));
+                lyd_new_list(parent, module, name, 0, &data, APTERYX_NAME(child));
+                for (GNode *field = child->children; field; field = field->next) {
+                    gnode_to_lydnode (module, lysc_node_child (schema), data, field, depth + 1);
+                }
+            }
+            break;
+        case LYS_LEAF:
+            if (!APTERYX_HAS_VALUE (node)) {
+                ERROR ("ERROR: Leaf node (%s) has not data\n", name);
+                return NULL;
+            }
+            VERBOSE ("%*s%s = %s\n", depth * 2, " ", APTERYX_NAME(node), APTERYX_VALUE(node));
+            lyd_new_term (parent, module, name, APTERYX_VALUE (node), 0, &data);
+            break;
+        default:
+            ERROR ("ERROR: Unsupported type %d for node %s\n", schema->nodetype, schema->name);
+            return NULL;
+    }
+
+    return data;
+}
+
+static GNode *
+lydnode_to_gnode (struct lys_module *module, const struct lysc_node *schema, GNode *parent, struct lyd_node *lydnode, int depth)
+{
+    const char *name = LYD_NAME(lydnode);
+    struct lyd_node *child;
     GNode *tree = NULL;
     GNode *node = NULL;
 
     /* Find schema node */
-    if (!yang)
-        yang = lys_getnext (NULL, NULL, module, LYS_GETNEXT_NOSTATECHECK);
-    while (yang) {
-        if (g_strcmp0 (yang->name, xml->name) == 0) {
+    if (!schema)
+        schema = lys_getnext (NULL, NULL, module->compiled, 0);
+    while (schema) {
+        if (g_strcmp0 (schema->name, name) == 0) {
             break;
         }
-        yang = lys_getnext (yang, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+        schema = lys_getnext (schema, NULL, module->compiled, 0);
     }
-    if (yang == NULL) {
-        ERROR ("ERROR: No match for %s\n", xml->name);
+    if (schema == NULL) {
+        ERROR ("ERROR: No match for %s\n", name);
         return NULL;
     }
 
-    /* Create a node */
-    if (depth == 0) {
-        // VERBOSE ("%*s%s\n", depth * 2, " ", "/");
-        // depth++;
-        // VERBOSE ("%*s%s\n", depth * 2, " ", xml->name);
-        // tree = APTERYX_NODE (NULL, g_strdup ("/"));
-        // node = APTERYX_NODE (tree, g_strdup (xml->name));
-        VERBOSE ("%*s/%s\n", depth * 2, " ", xml->name);
-        tree = node = APTERYX_NODE (NULL, g_strdup_printf ("/%s", xml->name));
-    }
-    else if (yang->nodetype == LYS_LIST) {
-        VERBOSE ("%*s%s\n", depth * 2, " ", xml->name);
-        depth++;
-        tree = APTERYX_NODE (NULL, g_strdup (xml->name));
-        if (xml->child && xml->child->content && strlen (xml->child->content) != 0) {
-            // TODO make sure this key is the list key
-            node = APTERYX_NODE (tree, g_strdup (xml->child->content));
-            if (query)
-                xml = xml->child;
+    switch (schema->nodetype) {
+        case LYS_CONTAINER:
+            VERBOSE ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
+            tree = node = APTERYX_NODE (NULL, g_strdup_printf ("%s%s", depth ? "" : "/", name));
+            for (child = lyd_child(lydnode); child; child = child->next) {
+                GNode *cn = lydnode_to_gnode (module, lysc_node_child (schema), NULL, child, depth + 1);
+                if (!cn) {
+                    ERROR ("ERROR: No child match for %s\n", lysc_node_child (schema)->name);
+                    apteryx_free_tree (node);
+                    return NULL;
+                }
+                g_node_append (node, cn);
+            }
+            break;
+        case LYS_LIST:
+            VERBOSE ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
+            depth++;
+            tree = node = APTERYX_NODE (NULL, g_strdup (name));
+            if (lyd_child(lydnode) && lysc_is_key(lyd_child(lydnode)->schema) &&
+                strlen(((struct lyd_node_any *) lyd_child(lydnode))->value.str) > 0) {
+                node = APTERYX_NODE (node, g_strdup (((struct lyd_node_any *) lyd_child(lydnode))->value.str));
+            } else {
+                node = APTERYX_NODE (node, g_strdup ("*"));
+            }
+            VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME(node));
+            for (child = lyd_child(lydnode); child; child = child->next) {
+                if (lysc_is_key(lysc_node_child (schema)) && lysc_node_child (schema)->nodetype == LYS_LEAF &&
+                    strlen(((struct lyd_node_any *) lyd_child(lydnode))->value.str) > 0)
+                    continue;
+                GNode *cn = lydnode_to_gnode (module, lysc_node_child (schema), NULL, child, depth + 1);
+                if (!cn) {
+                    ERROR ("ERROR: No child match for %s\n", child->schema->name);
+                    apteryx_free_tree (node);
+                    return NULL;
+                }
+                g_node_append (node, cn);
+            }
+            if (lysc_is_key(lysc_node_child (schema)) && lysc_node_child (schema)->nodetype == LYS_LEAF)
+                lydnode = lyd_child(lydnode);
+            break;
+        case LYS_LEAF:
+        {
+            const struct lyd_node_any *any = (struct lyd_node_any *)lydnode;
+            struct lyd_meta *meta = meta = lyd_find_meta(lydnode->meta, NULL, "ietf-netconf:operation");
+            tree = node = APTERYX_NODE (NULL, g_strdup (name));
+            if (meta && !g_strcmp0 (lyd_get_meta_value (meta), "delete")) {
+                APTERYX_NODE (tree, g_strdup (""));
+                VERBOSE ("%*s%s = NULL\n", depth * 2, " ", name);
+            }
+            else if (any->value.str && any->value.str[0]) {
+                APTERYX_NODE (tree, g_strdup (any->value.str));
+                VERBOSE ("%*s%s = %s\n", depth * 2, " ", name, any->value.str);
+            } else {
+                VERBOSE ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
+            }
+            break;
         }
-        else if (query && xml->attr) {
-            // TODO make sure this key is the list key
-            node = APTERYX_NODE (tree, g_strdup (xml->attr->value));
-        }
-        else {
-            node = APTERYX_NODE (tree, g_strdup ("*"));
-        }
-        VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
-    }
-    else if (yang->nodetype == LYS_LEAF) {
-        tree = APTERYX_NODE (NULL, g_strdup (xml->name));
-        if (xml->attr && g_strcmp0 (xml->attr->name , "operation") == 0 && g_strcmp0 (xml->attr->value, "delete") == 0) {
-            APTERYX_NODE (tree, g_strdup (""));
-            VERBOSE ("%*s%s = NULL\n", depth * 2, " ", xml->name);
-        }
-        else if (xml->content && strlen (xml->content) != 0) {
-            APTERYX_NODE (tree, g_strdup (xml->content));
-            VERBOSE ("%*s%s = %s\n", depth * 2, " ", xml->name, xml->content);
-        }
-        return tree;
-    }
-    else {
-        VERBOSE ("%*s%s\n", depth * 2, " ", xml->name);
-        tree = node = APTERYX_NODE (NULL, g_strdup_printf ("%s", xml->name));
+        default:
+            ERROR ("ERROR: Unsupported type %d for node %s\n", schema->nodetype, schema->name);
+            return NULL;
     }
 
-    /* Process children */
-    if (xml->child) {
-        yang = yang->child;
-        for (struct lyxml_elem *child = xml->child; child; child = child->next)
-        {
-            GNode *cn = xml_to_gnode (module, yang, child, depth + 1, query);
-            if (!cn) {
-                ERROR ("ERROR: No child match for %s\n", child->name);
-                apteryx_free_tree (tree);
-                return NULL;
-            }
-            g_node_append (node, cn);
-        }
-    }
-    else if (yang->child && g_strcmp0 (APTERYX_NAME (node), "*") != 0) {
-        /* Get everything from here down */
-        if (node)
-            APTERYX_NODE (node, g_strdup ("*"));
-        else
-            APTERYX_NODE (tree, g_strdup ("*"));
+    /* Get everything from here down if a trunk of a subtree */
+    if (!lyd_child(lydnode) && lysc_node_child (schema) && g_strcmp0 (APTERYX_NAME (node), "*") != 0) {
+        APTERYX_NODE (node, g_strdup ("*"));
         VERBOSE ("%*s%s\n", (depth + 1) * 2, " ", "*");
     }
-
     return tree;
-}
-
-/* Find an attribute */
-static const char *
-get_attr (struct lyd_node *node, const char *name)
-{
-    for (struct lyd_attr * attr = node->attr; attr; attr = attr->next)
-    {
-        if (g_strcmp0 (attr->name, name) == 0)
-        {
-            return attr->value_str;
-        }
-    }
-    return NULL;
 }
 
 /* op_get */
 static struct nc_server_reply *
 op_get (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = (struct lys_module *) ly_ctx_get_module (g_ctx, "test", NULL, 0); // TODO
+    struct lys_module *module = ly_ctx_get_module_implemented (g_ctx, "test"); // TODO
     NC_WD_MODE nc_wd;
     struct ly_set *nodeset;
     struct lyd_node *node;
-    struct nc_server_error *e;
+    struct lyd_node *output;
     char *msg = NULL;
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
     GNode *query = NULL;
@@ -333,94 +321,81 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
     /* Select datastore ("get" is always RUNNING) */
     if (g_strcmp0 (rpc->schema->name, "get-config") == 0)
     {
-        nodeset = lyd_find_path (rpc, "/ietf-netconf:get-config/source/*");
-        if (g_strcmp0 (nodeset->set.d[0]->schema->name, "running") != 0)
+        lyd_find_xpath (rpc, "/ietf-netconf:get-config/source/*", &nodeset);
+        if (g_strcmp0 (nodeset->dnodes[0]->schema->name, "running") != 0)
         {
             msg =
                 g_strdup_printf ("Datastore \"%s\" not supported",
-                                 nodeset->set.d[0]->schema->name);
-            ly_set_free (nodeset);
+                                 nodeset->dnodes[0]->schema->name);
+            ly_set_free (nodeset, NULL);
             goto error;
         }
-        ly_set_free (nodeset);
+        ly_set_free (nodeset, NULL);
     }
 
     /* Parse filters */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:*/filter");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:*/filter", &nodeset);
+    if (nodeset->count)
     {
-        node = nodeset->set.d[0];
-        const char *type = get_attr (node, "type");
-        if (g_strcmp0 (type, "xpath") == 0)
+        node = nodeset->dnodes[0];
+        struct lyd_meta *meta = lyd_find_meta (node->meta, NULL, "ietf-netconf:type");
+        if (meta && !g_strcmp0 (lyd_get_meta_value (meta), "xpath"))
         {
-            const char *path = get_attr (node, "select");
-            if (!path)
+            meta = lyd_find_meta (node->meta, NULL, "ietf-netconf:select");
+            if (!meta)
             {
                 msg = g_strdup_printf ("XPATH missing \"select\" attribute");
-                ly_set_free (nodeset);
+                ly_set_free (nodeset, NULL);
                 err = NC_ERR_MISSING_ATTR;
                 goto error;
             }
-            query = xpath_to_query (module, NULL, path, 0);
+            query = xpath_to_query (module, NULL, lyd_get_meta_value (meta), 0);
         }
-        else if (g_strcmp0 (type, "subtree") == 0)
+        else if (meta && !g_strcmp0 (lyd_get_meta_value (meta), "subtree"))
         {
             LYD_ANYDATA_VALUETYPE data_type =
-                ((struct lyd_node_anydata *) node)->value_type;
-            struct lyxml_elem *xml;
+                ((struct lyd_node_any *) node)->value_type;
             switch (data_type)
             {
-            case LYD_ANYDATA_CONSTSTRING:
-            case LYD_ANYDATA_STRING:
-                {
-                    xml =
-                        lyxml_parse_mem (g_ctx,
-                                         ((struct lyd_node_anydata *) node)->value.str,
-                                         LYXML_PARSE_MULTIROOT);
-                    break;
-                }
-            case LYD_ANYDATA_XML:
-                {
-                    xml = ((struct lyd_node_anydata *) node)->value.xml;
-                    break;
-                }
+            case LYD_ANYDATA_DATATREE:
+                query = lydnode_to_gnode (module, NULL, NULL, ((struct lyd_node_any *) node)->value.tree, 0);
+                break;
             default:
                 {
+                    ERROR ("ERROR: Unsupported subtree data type \"%d\"\n", data_type);
                     msg =
                         g_strdup_printf ("Unsupported subtree data type \"%d\"", data_type);
-                    ly_set_free (nodeset);
+                    ly_set_free (nodeset, NULL);
                     goto error;
                 }
             }
-            query = xml_to_gnode (module, NULL, xml, 0, true);
         }
         else
         {
-            msg = g_strdup_printf ("Unsupported filter type \"%s\"", type);
-            ly_set_free (nodeset);
+            ERROR ("ERROR: Unsupported filter type \"%s\"\n", lyd_get_meta_value (meta));
+            msg = g_strdup_printf ("Unsupported filter type \"%s\"", lyd_get_meta_value (meta));
+            ly_set_free (nodeset, NULL);
             goto error;
         }
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Parse with-defaults */
     nc_server_get_capab_withdefaults (&nc_wd, NULL);
-    nodeset =
-        lyd_find_path (rpc, "/ietf-netconf:*/ietf-netconf-with-defaults:with-defaults");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:*/ietf-netconf-with-defaults:with-defaults", &nodeset);
+    if (nodeset->count)
     {
-        struct lyd_node_leaf_list *leaf;
-        leaf = (struct lyd_node_leaf_list *) nodeset->set.d[0];
-        if (g_strcmp0 (leaf->value_str, "report-all") == 0)
+        node = nodeset->dnodes[0];
+        if (g_strcmp0 (lyd_get_value(node), "report-all") == 0)
             nc_wd = NC_WD_ALL;
-        else if (g_strcmp0 (leaf->value_str, "report-all-tagged") == 0)
+        else if (g_strcmp0 (lyd_get_value(node), "report-all-tagged") == 0)
             nc_wd = NC_WD_ALL_TAG;
-        else if (g_strcmp0 (leaf->value_str, "trim") == 0)
+        else if (g_strcmp0 (lyd_get_value(node), "trim") == 0)
             nc_wd = NC_WD_TRIM;
-        else if (g_strcmp0 (leaf->value_str, "explicit") == 0)
+        else if (g_strcmp0 (lyd_get_value(node), "explicit") == 0)
             nc_wd = NC_WD_EXPLICIT;
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     //TODO - check read permissons
 
@@ -432,116 +407,113 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
     //TODO - with-defaults 
 
     /* Convert result to XML */
-    node = tree ? gnode_to_lydnode (module, NULL, tree, 0) : NULL;
+    node = tree ? gnode_to_lydnode (module, NULL, NULL, tree, 0) : NULL;
     apteryx_free_tree (tree);
 
     /* Send response */
-    node = lyd_new_path (NULL, g_ctx, "/ietf-netconf:get/data", node,
-                         LYD_ANYDATA_DATATREE, LYD_PATH_OPT_OUTPUT);
-    return nc_server_reply_data (node, NC_WD_EXPLICIT, NC_PARAMTYPE_FREE);
+    lyd_new_path (NULL, g_ctx, "/ietf-netconf:get", NULL, LYD_NEW_PATH_OUTPUT, &output);
+    lyd_new_any (output, NULL, "data", node, 1, LYD_ANYDATA_DATATREE, 1, NULL);
+    return nc_server_reply_data (output, NC_WD_EXPLICIT, NC_PARAMTYPE_FREE);
 
   error:
-    e = nc_err (err, NC_ERR_TYPE_APP);
+    node = nc_err (g_ctx, err, NC_ERR_TYPE_APP);
     if (msg)
     {
         ERROR ("NETCONF: %s\n", msg);
-        nc_err_set_msg (e, msg, "en");
+        nc_err_set_msg (node, msg, "en");
         free (msg);
     }
-    return nc_server_reply_err (e);
+    return nc_server_reply_err (node);
 }
 
 /* op_edit */
 static struct nc_server_reply *
 op_edit (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = (struct lys_module *) ly_ctx_get_module (g_ctx, "test", NULL, 0); // TODO
+    struct lys_module *module = (struct lys_module *) ly_ctx_get_module_implemented (g_ctx, "test"); // TODO
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
-    struct nc_server_error *e;
     char *msg = NULL;
     struct ly_set *nodeset;
+    struct lyd_node *node;
     GNode *tree = NULL;
 
     /* Check target */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:edit-config/target/*");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:edit-config/target/*", &nodeset);
+    if (nodeset->count)
     {
-        if (g_strcmp0 (nodeset->set.d[0]->schema->name, "running") != 0)
+        if (g_strcmp0 (nodeset->dnodes[0]->schema->name, "running") != 0)
         {
             msg =
                 g_strdup_printf ("Cannot edit datastore \"%s\"",
-                                 nodeset->set.d[0]->schema->name);
-            ly_set_free (nodeset);
+                                 nodeset->dnodes[0]->schema->name);
+            ly_set_free (nodeset, NULL);
             goto error;
         }
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Check default-operation */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:edit-config/default-operation");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:edit-config/default-operation", &nodeset);
+    if (nodeset->count)
     {
-        struct lyd_node_leaf_list *leaf;
-        leaf = (struct lyd_node_leaf_list *) nodeset->set.d[0];
-        if (g_strcmp0 (leaf->value_str, "merge") != 0)
+        node = nodeset->dnodes[0];
+        if (g_strcmp0 (lyd_get_value(node), "merge") != 0)
         {
             msg =
                 g_strdup_printf ("Do not support default-operation \"%s\"",
-                                 leaf->value_str);
-            ly_set_free (nodeset);
+                                 lyd_get_value(node));
+            ly_set_free (nodeset, NULL);
             goto error;
         }
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Check test-option */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:edit-config/test-option");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:edit-config/test-option", &nodeset);
+    if (nodeset->count)
     {
-        struct lyd_node_leaf_list *leaf;
-        leaf = (struct lyd_node_leaf_list *) nodeset->set.d[0];
-        if (g_strcmp0 (leaf->value_str, "test-then-set") != 0)
+        node = nodeset->dnodes[0];
+        if (g_strcmp0 (lyd_get_value(node), "test-then-set") != 0)
         {
-            msg = g_strdup_printf ("Do not support test-option \"%s\"", leaf->value_str);
-            ly_set_free (nodeset);
+            msg = g_strdup_printf ("Do not support test-option \"%s\"", lyd_get_value(node));
+            ly_set_free (nodeset, NULL);
             goto error;
         }
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Check error-option */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:edit-config/error-option");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:edit-config/error-option", &nodeset);
+    if (nodeset->count)
     {
-        struct lyd_node_leaf_list *leaf;
-        leaf = (struct lyd_node_leaf_list *) nodeset->set.d[0];
-        if (g_strcmp0 (leaf->value_str, "stop-on-error") != 0)
+        node = nodeset->dnodes[0];
+        if (g_strcmp0 (lyd_get_value(node), "stop-on-error") != 0)
         {
-            msg = g_strdup_printf ("Do not support error-option \"%s\"", leaf->value_str);
-            ly_set_free (nodeset);
+            msg = g_strdup_printf ("Do not support test-option \"%s\"", lyd_get_value(node));
+            ly_set_free (nodeset, NULL);
             goto error;
         }
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Parse config */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:edit-config/config");
-    if (nodeset->number)
+    lyd_find_xpath (rpc, "/ietf-netconf:edit-config/config", &nodeset);
+    if (nodeset->count)
     {
-        struct lyd_node_anydata *any;
-        any = (struct lyd_node_anydata *) nodeset->set.d[0];
+        struct lyd_node_any *any;
+        any = (struct lyd_node_any *) nodeset->dnodes[0];
         switch (any->value_type)
         {
-        case LYD_ANYDATA_XML:
-            tree = xml_to_gnode (module, NULL, any->value.xml, 0, false);
+        case LYD_ANYDATA_DATATREE:
+            tree = lydnode_to_gnode (module, NULL, NULL, any->value.tree, 0);
             break;
         default:
             msg = g_strdup_printf ("Unsupported data type \"%d\"", any->value_type);
-            ly_set_free (nodeset);
+            ly_set_free (nodeset, NULL);
             goto error;
         }
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     //TODO - permissions
     //TODO - patterns
@@ -561,14 +533,14 @@ op_edit (struct lyd_node *rpc, struct nc_session *ncs)
     return nc_server_reply_ok ();
 
   error:
-    e = nc_err (err, NC_ERR_TYPE_APP);
+    node = nc_err (g_ctx, err, NC_ERR_TYPE_APP);
     if (msg)
     {
         ERROR ("NETCONF: %s\n", msg);
-        nc_err_set_msg (e, msg, "en");
+        nc_err_set_msg (node, msg, "en");
         free (msg);
     }
-    return nc_server_reply_err (e);
+    return nc_server_reply_err (node);
 }
 
 /* op_copy */
@@ -576,31 +548,32 @@ static struct nc_server_reply *
 op_copy (struct lyd_node *rpc, struct nc_session *ncs)
 {
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
-    struct nc_server_error *e;
+    // struct nc_server_error *e;
     char *msg = NULL;
     struct ly_set *nodeset;
+    struct lyd_node *node;
 
     /* Check datastores (only support running->startup) */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:copy-config/source/*");
-    if (g_strcmp0 (nodeset->set.d[0]->schema->name, "running") != 0)
+    lyd_find_xpath (rpc, "/ietf-netconf:copy-config/source/*", &nodeset);
+    if (g_strcmp0 (nodeset->dnodes[0]->schema->name, "running") != 0)
     {
         msg =
             g_strdup_printf ("Cannot copy from datastore \"%s\"",
-                             nodeset->set.d[0]->schema->name);
-        ly_set_free (nodeset);
+                             nodeset->dnodes[0]->schema->name);
+        ly_set_free (nodeset, NULL);
         goto error;
     }
-    ly_set_free (nodeset);
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:copy-config/target/*");
-    if (g_strcmp0 (nodeset->set.d[0]->schema->name, "startup") != 0)
+    ly_set_free (nodeset, NULL);
+    lyd_find_xpath (rpc, "/ietf-netconf:copy-config/target/*", &nodeset);
+    if (g_strcmp0 (nodeset->dnodes[0]->schema->name, "startup") != 0)
     {
         msg =
             g_strdup_printf ("Cannot copy to datastore \"%s\"",
-                             nodeset->set.d[0]->schema->name);
-        ly_set_free (nodeset);
+                             nodeset->dnodes[0]->schema->name);
+        ly_set_free (nodeset, NULL);
         goto error;
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Copy running->startup */
     if (system (cp_cmd))
@@ -614,14 +587,14 @@ op_copy (struct lyd_node *rpc, struct nc_session *ncs)
     return nc_server_reply_ok ();
 
   error:
-    e = nc_err (err, NC_ERR_TYPE_APP);
+    node = nc_err (g_ctx, err, NC_ERR_TYPE_APP);
     if (msg)
     {
         ERROR ("NETCONF: %s\n", msg);
-        nc_err_set_msg (e, msg, "en");
+        nc_err_set_msg (node, msg, "en");
         free (msg);
     }
-    return nc_server_reply_err (e);
+    return nc_server_reply_err (node);
 }
 
 /* op_delete */
@@ -629,21 +602,22 @@ static struct nc_server_reply *
 op_delete (struct lyd_node *rpc, struct nc_session *ncs)
 {
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
-    struct nc_server_error *e;
+    // struct nc_server_error *e;
     char *msg = NULL;
     struct ly_set *nodeset;
+    struct lyd_node *node;
 
     /* Check datastore (onlt support startup) */
-    nodeset = lyd_find_path (rpc, "/ietf-netconf:delete-config/target/*");
-    if (g_strcmp0 (nodeset->set.d[0]->schema->name, "startup") != 0)
+    lyd_find_xpath (rpc, "/ietf-netconf:delete-config/target/*", &nodeset);
+    if (g_strcmp0 (nodeset->dnodes[0]->schema->name, "startup") != 0)
     {
         msg =
             g_strdup_printf ("Cannot delete datastore \"%s\"",
-                             nodeset->set.d[0]->schema->name);
-        ly_set_free (nodeset);
+                             nodeset->dnodes[0]->schema->name);
+        ly_set_free (nodeset, NULL);
         goto error;
     }
-    ly_set_free (nodeset);
+    ly_set_free (nodeset, NULL);
 
     /* Delete startup-config */
     if (system (rm_cmd))
@@ -657,14 +631,14 @@ op_delete (struct lyd_node *rpc, struct nc_session *ncs)
     return nc_server_reply_ok ();
 
   error:
-    e = nc_err (err, NC_ERR_TYPE_APP);
+    node = nc_err (g_ctx, err, NC_ERR_TYPE_APP);
     if (msg)
     {
         ERROR ("NETCONF: %s\n", msg);
-        nc_err_set_msg (e, msg, "en");
+        nc_err_set_msg (node, msg, "en");
         free (msg);
     }
-    return nc_server_reply_err (e);
+    return nc_server_reply_err (node);
 }
 
 static void *
@@ -698,6 +672,7 @@ netconf_accept_thread (gpointer data)
     NC_MSG_TYPE msgtype;
 
     usleep (1000000);
+    VERBOSE ("NETCONF: Accepting client connections\n");
     while (g_main_loop_is_running (g_loop))
     {
         msgtype = nc_accept (500, &ncs);
@@ -718,6 +693,7 @@ netconf_accept_thread (gpointer data)
         }
     }
     g_thread_pool_free (workers, true, false);
+    VERBOSE ("NETCONF: Finished accepting clients\n");
     return NULL;
 }
 
@@ -757,8 +733,8 @@ list_schema_files (GList **files, const char *path)
 gboolean
 netconf_init (const char *path, int port, const char *unix_path, const char *cp, const char *rm)
 {
-    const struct lys_module *mod;
-    const struct lys_node *snode;
+    struct lys_module *mod;
+    struct lysc_node *rpc;
     GList *files = NULL;
     GList *iter;
 
@@ -782,12 +758,19 @@ netconf_init (const char *path, int port, const char *unix_path, const char *cp,
     rm_cmd = rm;
 
     /* Schemas */
-    g_ctx = ly_ctx_new (path, 0);
+    if (ly_ctx_new (path, 0, &g_ctx))
+    {
+        ERROR ("NETCONF: Failed to create libyang context");
+        return false;
+    }
+    ly_ctx_load_module (g_ctx, "ietf-netconf", NULL, NULL);
+    ly_ctx_load_module (g_ctx, "ietf-netconf-with-defaults", NULL, NULL);
     list_schema_files (&files, path);
     for (iter = files; iter; iter = g_list_next (iter))
     {
         char *filename = (char *) iter->data;
-        lys_parse_path (g_ctx, filename, LYS_IN_YANG);
+        DEBUG ("NETCONF: Loading %s\n", filename);
+        lys_parse_path (g_ctx, filename, LYS_IN_YANG, &mod);
     }
     g_list_free_full (files, free);
 
@@ -802,18 +785,18 @@ netconf_init (const char *path, int port, const char *unix_path, const char *cp,
     nc_server_set_capab_withdefaults (NC_WD_EXPLICIT,
                                       NC_WD_ALL | NC_WD_ALL_TAG | NC_WD_TRIM |
                                       NC_WD_EXPLICIT);
-    mod = ly_ctx_get_module (g_ctx, "ietf-netconf", NULL, 1);
-    if (mod)
-    {
-        lys_features_enable (mod, "writable-running");
-        lys_features_disable (mod, "candidate");
-        lys_features_disable (mod, "confirmed-commit");
-        lys_features_disable (mod, "rollback-on-error");
-        lys_features_disable (mod, "validate");
-        lys_features_enable (mod, "startup");
-        lys_features_disable (mod, "url");
-        lys_features_enable (mod, "xpath");
-    }
+    mod = ly_ctx_get_module_implemented(g_ctx, "ietf-netconf");
+    // if (mod)
+    // {
+    //     lys_features_enable (mod, "writable-running");
+    //     lys_features_disable (mod, "candidate");
+    //     lys_features_disable (mod, "confirmed-commit");
+    //     lys_features_disable (mod, "rollback-on-error");
+    //     lys_features_disable (mod, "validate");
+    //     lys_features_enable (mod, "startup");
+    //     lys_features_disable (mod, "url");
+    //     lys_features_enable (mod, "xpath");
+    // }
 
     /* Set server options */
     if (nc_server_add_endpt ("unix", NC_TI_UNIX) ||
@@ -825,21 +808,21 @@ netconf_init (const char *path, int port, const char *unix_path, const char *cp,
     }
 
     /* Setup handlers */
-    snode = ly_ctx_get_node (g_ctx, NULL, "/ietf-netconf:get", 0);
-    lys_set_private (snode, op_get);
-    snode = ly_ctx_get_node (g_ctx, NULL, "/ietf-netconf:get-config", 0);
-    lys_set_private (snode, op_get);
-    snode = ly_ctx_get_node (g_ctx, NULL, "/ietf-netconf:edit-config", 0);
-    lys_set_private (snode, op_edit);
+    rpc = (struct lysc_node *)lys_find_path (g_ctx, NULL, "/ietf-netconf:get", 0);
+    nc_set_rpc_callback (rpc, op_get);
+    rpc = (struct lysc_node *)lys_find_path (g_ctx, NULL, "/ietf-netconf:get-config", 0);
+    nc_set_rpc_callback (rpc, op_get);
+    rpc = (struct lysc_node *)lys_find_path (g_ctx, NULL, "/ietf-netconf:edit-config", 0);
+    nc_set_rpc_callback (rpc, op_edit);
     if (cp_cmd)
     {
-        snode = ly_ctx_get_node (g_ctx, NULL, "/ietf-netconf:copy-config", 0);
-        lys_set_private (snode, op_copy);
+        rpc = (struct lysc_node *)lys_find_path (g_ctx, NULL, "/ietf-netconf:copy-config", 0);
+        nc_set_rpc_callback (rpc, op_copy);
     }
     if (rm_cmd)
     {
-        snode = ly_ctx_get_node (g_ctx, NULL, "/ietf-netconf:delete-config", 0);
-        lys_set_private (snode, op_delete);
+        rpc = (struct lysc_node *)lys_find_path (g_ctx, NULL, "/ietf-netconf:delete-config", 0);
+        nc_set_rpc_callback (rpc, op_delete);
     }
 
     /* Create a thread for processing new sessions */
@@ -854,6 +837,6 @@ netconf_shutdown (void)
 {
     DEBUG ("NETCONF: Stopping\n");
     nc_server_destroy ();
-    ly_ctx_destroy (g_ctx, NULL);
+    ly_ctx_destroy (g_ctx);
     return true;
 }
