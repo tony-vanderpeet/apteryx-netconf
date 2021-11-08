@@ -79,7 +79,7 @@ echo -e "
 HostKey $BUILD/ssh_host_rsa_key
 HostKeyAlgorithms ssh-rsa,ssh-dss
 Port 830
-Subsystem netconf exec socat STDIO UNIX:$BUILD/apteryx-netconf
+Subsystem netconf socat STDIO UNIX:$BUILD/apteryx-netconf.sock
 " > $BUILD/sshd_config
 
 # Build
@@ -111,7 +111,7 @@ sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 sudo LD_LIBRARY_PATH=$BUILD/usr/lib \
     LIBYANG_EXTENSIONS_PLUGINS_DIR=$BUILD/usr/lib/libyang1/extensions \
     LIBYANG_USER_TYPES_PLUGINS_DIR=$BUILD/src/user_types \
-    $TEST_WRAPPER ../src/apteryx-netconf -v --unix $BUILD/apteryx-netconf --models $BUILD/../models/
+    $TEST_WRAPPER ../src/apteryx-netconf -v --models $BUILD/../models/ --unix $BUILD/apteryx-netconf.sock
 rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 
 # Stop restconf
