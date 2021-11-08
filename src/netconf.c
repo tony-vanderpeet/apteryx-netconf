@@ -72,8 +72,27 @@ new_lyd_node(struct lyd_node *parent, struct lys_module **module, const char *na
     return new_node;
 }
 
+static const struct lys_module *
+find_best_module (const char *name)
+{
+    const struct lys_module *module;
+    uint32_t idx = 0;
+
+    while ((module = ly_ctx_get_module_iter (g_ctx, &idx))) {
+        const struct lys_node *schema = module->data;
+        while (schema) {
+            if (g_strcmp0 (schema->name, name) == 0) {
+                return module;
+            }
+            schema = lys_getnext (schema, NULL, module, LYS_GETNEXT_NOSTATECHECK);
+        }
+    }
+
+    return NULL;
+}
+
 static struct lyd_node* 
-gnode_to_lydnode (struct lys_module *module, struct lyd_node *parent, GNode *node, int depth)
+gnode_to_lydnode (const struct lys_module *module, struct lyd_node *parent, GNode *node, int depth)
 {
     struct lyd_node *data = NULL;
     char *name;
@@ -82,11 +101,22 @@ gnode_to_lydnode (struct lys_module *module, struct lyd_node *parent, GNode *nod
     VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME(node));
 
     if (depth == 0 && strlen (APTERYX_NAME (node)) == 1) {
-        return gnode_to_lydnode(module, data, node->children, 1);
+        return gnode_to_lydnode(module, data, node->children, depth);
     } else if (depth == 0 && APTERYX_NAME( node)[0] == '/') {
         name = APTERYX_NAME (node) + 1;
     } else {
         name = APTERYX_NAME (node);
+    }
+
+    /* Find the module this path element is part of */
+    if (!module) {
+        // TODO - non root paths
+        if (depth == 0)
+            module = find_best_module (name);
+        if (!module) {
+            ERROR ("ERROR: No module found for \"%s\"\n", name);
+            return NULL;
+        }
     }
 
     if (APTERYX_HAS_VALUE (node)) {
@@ -96,7 +126,7 @@ gnode_to_lydnode (struct lys_module *module, struct lyd_node *parent, GNode *nod
         /* Node is a list key, just skip it. */
         data = parent;
     } else {
-        data = new_lyd_node (parent, &module, name);
+        data = new_lyd_node (parent, (struct lys_module **) &module, name);
         if (data && data->schema->nodetype == LYS_LIST) {
             adding_list = true;
         }
@@ -106,7 +136,7 @@ gnode_to_lydnode (struct lys_module *module, struct lyd_node *parent, GNode *nod
         for (GNode *child = node->children; child; child = child->next) {
             gnode_to_lydnode (module, data, child, depth + 1);
             if (adding_list && child->next != NULL) {
-                data = new_lyd_node (parent, &module, name);
+                data = new_lyd_node (parent,  (struct lys_module **) &module, name);
             }
         }
     }
@@ -140,6 +170,19 @@ xpath_to_query (const struct lys_module *module, const struct lys_node *yang, co
             pred = strdup (pred);
             g_free (name);
             name = temp;
+        }
+
+        /* Find the module this path element is part of */
+        if (!module) {
+            // TODO - non root paths
+            if (depth == 0)
+                module = find_best_module (name);
+            if (!module) {
+                ERROR ("ERROR: No module found for \"%s\"\n", name);
+                g_free (name);
+                g_free (pred);
+                return NULL;
+            }
         }
 
         /* Find schema node */
@@ -211,6 +254,17 @@ xml_to_gnode(const struct lys_module *module, const struct lys_node *yang, struc
 {
     GNode *tree = NULL;
     GNode *node = NULL;
+
+    /* Find the module this path element is part of */
+    if (!module) {
+        // TODO - non root paths
+        if (depth == 0)
+            module = find_best_module (xml->name);
+        if (!module) {
+            ERROR ("ERROR: No module found for \"%s\"\n", xml->name);
+            return NULL;
+        }
+    }
 
     /* Find schema node */
     if (!yang)
@@ -316,7 +370,6 @@ get_attr (struct lyd_node *node, const char *name)
 static struct nc_server_reply *
 op_get (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = (struct lys_module *) ly_ctx_get_module (g_ctx, "test", NULL, 0); // TODO
     NC_WD_MODE nc_wd;
     struct ly_set *nodeset;
     struct lyd_node *node;
@@ -361,7 +414,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
                 err = NC_ERR_MISSING_ATTR;
                 goto error;
             }
-            query = xpath_to_query (module, NULL, path, 0);
+            query = xpath_to_query (NULL, NULL, path, 0);
         }
         else if (g_strcmp0 (type, "subtree") == 0)
         {
@@ -392,7 +445,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
                     goto error;
                 }
             }
-            query = xml_to_gnode (module, NULL, xml, 0, true);
+            query = xml_to_gnode (NULL, NULL, xml, 0, true);
         }
         else
         {
@@ -432,7 +485,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
     //TODO - with-defaults 
 
     /* Convert result to XML */
-    node = tree ? gnode_to_lydnode (module, NULL, tree, 0) : NULL;
+    node = tree ? gnode_to_lydnode (NULL, NULL, tree, 0) : NULL;
     apteryx_free_tree (tree);
 
     /* Send response */
@@ -455,7 +508,6 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
 static struct nc_server_reply *
 op_edit (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = (struct lys_module *) ly_ctx_get_module (g_ctx, "test", NULL, 0); // TODO
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
     struct nc_server_error *e;
     char *msg = NULL;
@@ -533,7 +585,7 @@ op_edit (struct lyd_node *rpc, struct nc_session *ncs)
         switch (any->value_type)
         {
         case LYD_ANYDATA_XML:
-            tree = xml_to_gnode (module, NULL, any->value.xml, 0, false);
+            tree = xml_to_gnode (NULL, NULL, any->value.xml, 0, false);
             break;
         default:
             msg = g_strdup_printf ("Unsupported data type \"%d\"", any->value_type);
