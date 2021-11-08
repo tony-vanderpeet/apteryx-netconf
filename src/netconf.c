@@ -47,8 +47,27 @@ log_cb (NC_VERB_LEVEL level, const char *msg)
     }
 }
 
+static const struct lys_module *
+find_best_module (const char *name)
+{
+    const struct lys_module *module;
+    uint32_t idx = 0;
+
+    while ((module = ly_ctx_get_module_iter (g_ctx, &idx))) {
+        const struct lysc_node *schema = lys_getnext (NULL, NULL, module->compiled, 0);
+        while (schema) {
+            if (g_strcmp0 (schema->name, name) == 0) {
+                return module;
+            }
+            schema = lys_getnext (schema, NULL, module->compiled, 0);
+        }
+    }
+
+    return NULL;
+}
+
 static GNode *
-xpath_to_query (struct lys_module **module, const struct lysc_node *yang, const char *xpath, int depth)
+xpath_to_query (const struct lys_module *module, const struct lysc_node *yang, const char *xpath, int depth)
 {
     const char *next;
     GNode *node = NULL;
@@ -75,16 +94,27 @@ xpath_to_query (struct lys_module **module, const struct lysc_node *yang, const 
             name = temp;
         }
 
+        /* Find the module this path element is part of */
+        if (!module) {
+            // TODO - non root paths
+            if (depth == 0)
+                module = find_best_module (name);
+            if (!module) {
+                ERROR ("ERROR: No module found for \"%s\"\n", name);
+                g_free (name);
+                g_free (pred);
+                return NULL;
+            }
+        }
+
         /* Find schema node */
-        if (!(*module))
-            *module = ly_ctx_get_module_implemented(g_ctx, name);
         if (!yang)
-            yang = lys_getnext (NULL, NULL, module && *module ? (*module)->compiled : NULL, 0);
+            yang = lys_getnext (NULL, NULL, module ? module->compiled : NULL, 0);
         while (yang) {
             if (g_strcmp0 (yang->name, name) == 0) {
                 break;
             }
-            yang = lys_getnext (yang, NULL, module && *module ? (*module)->compiled : NULL, 0);
+            yang = lys_getnext (yang, NULL, module ? module->compiled : NULL, 0);
         }
         if (yang == NULL) {
             ERROR ("ERROR: No match for %s\n", name);
@@ -142,18 +172,29 @@ xpath_to_query (struct lys_module **module, const struct lysc_node *yang, const 
 }
 
 static struct lyd_node* 
-gnode_to_lydnode (struct lys_module *module, const struct lysc_node *schema, struct lyd_node *parent, GNode *node, int depth)
+gnode_to_lydnode (const struct lys_module *module, const struct lysc_node *schema, struct lyd_node *parent, GNode *node, int depth)
 {
     struct lyd_node *data = NULL;
     char *name;
 
     /* Get the actual node name */
     if (depth == 0 && strlen (APTERYX_NAME (node)) == 1) {
-        return gnode_to_lydnode(module, schema, parent, node->children, 1);
+        return gnode_to_lydnode(module, schema, parent, node->children, depth);
     } else if (depth == 0 && APTERYX_NAME( node)[0] == '/') {
         name = APTERYX_NAME (node) + 1;
     } else {
         name = APTERYX_NAME (node);
+    }
+
+    /* Find the module this path element is part of */
+    if (!module) {
+        // TODO - non root paths
+        if (depth == 0)
+            module = find_best_module (name);
+        if (!module) {
+            ERROR ("ERROR: No module found for \"%s\"\n", name);
+            return NULL;
+        }
     }
 
     /* Find schema node */
@@ -211,12 +252,23 @@ gnode_to_lydnode (struct lys_module *module, const struct lysc_node *schema, str
 }
 
 static GNode *
-lydnode_to_gnode (struct lys_module *module, const struct lysc_node *schema, GNode *parent, struct lyd_node *lydnode, int depth)
+lydnode_to_gnode (const struct lys_module *module, const struct lysc_node *schema, GNode *parent, struct lyd_node *lydnode, int depth)
 {
     const char *name = LYD_NAME(lydnode);
     struct lyd_node *child;
     GNode *tree = NULL;
     GNode *node = NULL;
+
+    /* Find the module this path element is part of */
+    if (!module) {
+        // TODO - non root paths
+        if (depth == 0)
+            module = find_best_module (name);
+        if (!module) {
+            ERROR ("ERROR: No module found for \"%s\"\n", name);
+            return NULL;
+        }
+    }
 
     /* Find schema node */
     if (!schema)
@@ -306,7 +358,7 @@ lydnode_to_gnode (struct lys_module *module, const struct lysc_node *schema, GNo
 static struct nc_server_reply *
 op_get (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = NULL;
+    const struct lys_module *module = NULL;
     NC_WD_MODE nc_wd;
     struct ly_set *nodeset;
     struct lyd_node *node;
@@ -351,7 +403,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
                 err = NC_ERR_MISSING_ATTR;
                 goto error;
             }
-            query = xpath_to_query (&module, NULL, lyd_get_meta_value (meta), 0);
+            query = xpath_to_query (NULL, NULL, lyd_get_meta_value (meta), 0);
         }
         else if (meta && !g_strcmp0 (lyd_get_meta_value (meta), "subtree"))
         {
@@ -436,7 +488,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
 static struct nc_server_reply *
 op_edit (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = NULL;
+    const struct lys_module *module = NULL;
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
     char *msg = NULL;
     struct ly_set *nodeset;
