@@ -48,7 +48,7 @@ log_cb (NC_VERB_LEVEL level, const char *msg)
 }
 
 static GNode *
-xpath_to_query (const struct lys_module *module, const struct lysc_node *yang, const char *xpath, int depth)
+xpath_to_query (struct lys_module **module, const struct lysc_node *yang, const char *xpath, int depth)
 {
     const char *next;
     GNode *node = NULL;
@@ -76,13 +76,15 @@ xpath_to_query (const struct lys_module *module, const struct lysc_node *yang, c
         }
 
         /* Find schema node */
+        if (!(*module))
+            *module = ly_ctx_get_module_implemented(g_ctx, name);
         if (!yang)
-            yang = lys_getnext (NULL, NULL, module->compiled, 0);
+            yang = lys_getnext (NULL, NULL, module && *module ? (*module)->compiled : NULL, 0);
         while (yang) {
             if (g_strcmp0 (yang->name, name) == 0) {
                 break;
             }
-            yang = lys_getnext (yang, NULL, module->compiled, 0);
+            yang = lys_getnext (yang, NULL, module && *module ? (*module)->compiled : NULL, 0);
         }
         if (yang == NULL) {
             ERROR ("ERROR: No match for %s\n", name);
@@ -156,12 +158,12 @@ gnode_to_lydnode (struct lys_module *module, const struct lysc_node *schema, str
 
     /* Find schema node */
     if (!schema)
-        schema = lys_getnext (NULL, NULL, module->compiled, 0);
+        schema = lys_getnext (NULL, NULL, module ? module->compiled : NULL, 0);
     while (schema) {
         if (g_strcmp0 (schema->name, name) == 0) {
             break;
         }
-        schema = lys_getnext (schema, NULL, module->compiled, 0);
+        schema = lys_getnext (schema, NULL, module ? module->compiled : NULL, 0);
     }
     if (schema == NULL) {
         ERROR ("ERROR: No match for %s\n", name);
@@ -218,12 +220,12 @@ lydnode_to_gnode (struct lys_module *module, const struct lysc_node *schema, GNo
 
     /* Find schema node */
     if (!schema)
-        schema = lys_getnext (NULL, NULL, module->compiled, 0);
+        schema = lys_getnext (NULL, NULL, module ? module->compiled : NULL, 0);
     while (schema) {
         if (g_strcmp0 (schema->name, name) == 0) {
             break;
         }
-        schema = lys_getnext (schema, NULL, module->compiled, 0);
+        schema = lys_getnext (schema, NULL, module ? module->compiled : NULL, 0);
     }
     if (schema == NULL) {
         ERROR ("ERROR: No match for %s\n", name);
@@ -304,7 +306,7 @@ lydnode_to_gnode (struct lys_module *module, const struct lysc_node *schema, GNo
 static struct nc_server_reply *
 op_get (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = ly_ctx_get_module_implemented (g_ctx, "test"); // TODO
+    struct lys_module *module = NULL;
     NC_WD_MODE nc_wd;
     struct ly_set *nodeset;
     struct lyd_node *node;
@@ -349,7 +351,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
                 err = NC_ERR_MISSING_ATTR;
                 goto error;
             }
-            query = xpath_to_query (module, NULL, lyd_get_meta_value (meta), 0);
+            query = xpath_to_query (&module, NULL, lyd_get_meta_value (meta), 0);
         }
         else if (meta && !g_strcmp0 (lyd_get_meta_value (meta), "subtree"))
         {
@@ -358,8 +360,12 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
             switch (data_type)
             {
             case LYD_ANYDATA_DATATREE:
-                query = lydnode_to_gnode (module, NULL, NULL, ((struct lyd_node_any *) node)->value.tree, 0);
-                break;
+                {
+                    struct lyd_node *lydtree = ((struct lyd_node_any *)node)->value.tree;
+                    module = lydtree && lydtree->schema ? lydtree->schema->module : NULL;
+                    query = lydnode_to_gnode (module, NULL, NULL, lydtree, 0);
+                    break;
+                }
             default:
                 {
                     ERROR ("ERROR: Unsupported subtree data type \"%d\"\n", data_type);
@@ -430,7 +436,7 @@ op_get (struct lyd_node *rpc, struct nc_session *ncs)
 static struct nc_server_reply *
 op_edit (struct lyd_node *rpc, struct nc_session *ncs)
 {
-    struct lys_module *module = (struct lys_module *) ly_ctx_get_module_implemented (g_ctx, "test"); // TODO
+    struct lys_module *module = NULL;
     NC_ERR err = NC_ERR_OP_NOT_SUPPORTED;
     char *msg = NULL;
     struct ly_set *nodeset;
@@ -500,13 +506,16 @@ op_edit (struct lyd_node *rpc, struct nc_session *ncs)
     lyd_find_xpath (rpc, "/ietf-netconf:edit-config/config", &nodeset);
     if (nodeset->count)
     {
-        struct lyd_node_any *any;
-        any = (struct lyd_node_any *) nodeset->dnodes[0];
+        struct lyd_node_any *any = (struct lyd_node_any *) nodeset->dnodes[0];
         switch (any->value_type)
         {
         case LYD_ANYDATA_DATATREE:
-            tree = lydnode_to_gnode (module, NULL, NULL, any->value.tree, 0);
-            break;
+            {
+                struct lyd_node *lydtree = any->value.tree;
+                module = lydtree && lydtree->schema ? lydtree->schema->module : NULL;
+                tree = lydnode_to_gnode (module, NULL, NULL, lydtree, 0);
+                break;
+            }
         default:
             msg = g_strdup_printf ("Unsupported data type \"%d\"", any->value_type);
             ly_set_free (nodeset, NULL);
