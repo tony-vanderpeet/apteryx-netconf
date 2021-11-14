@@ -4,6 +4,7 @@ apteryx-netconf
 host.key
 host.key.pub
 .build/
+__pycache__/
 
 # Autotools
 m4/

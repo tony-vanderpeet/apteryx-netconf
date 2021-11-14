@@ -113,67 +113,67 @@ def test_get_subtree_empty_filter():
     m.close_session()
 
 def test_get_subtree_node():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><settings><debug/></settings></test>'
+    select = '<test><settings><debug/></settings></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <settings>
             <debug>enable</debug>
         </settings>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_trunk():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><settings/></test>'
+    select = '<test><settings/></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <settings>
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
         </settings>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_multi_parameters():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><settings><debug/><priority/></settings></test>'
+    select = '<test><settings><debug/><priority/></settings></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <settings>
             <debug>enable</debug>
             <priority>1</priority>
         </settings>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_list_container():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals/></test>'
+    select = '<test><animals/></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -190,20 +190,20 @@ def test_get_subtree_list_container():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 @pytest.mark.skip(reason="does not work - rfc6241:6.4.3 - broken libnetconf2?")
 def test_get_subtree_list_element():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal/></animals></test>'
+    select = '<test><animals><animal/></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -220,19 +220,19 @@ def test_get_subtree_list_element():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_list_parameter():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal><name/></animal></animals></test>'
+    select = '<test><animals><animal><name/></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -245,19 +245,19 @@ def test_get_subtree_list_parameter():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_selection_multi():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal><name/><type/></animal></animals></test>'
+    select = '<test><animals><animal><name/><type/></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -272,19 +272,19 @@ def test_get_subtree_selection_multi():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_select_one_node():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal><name>cat</name></animal></animals></test>'
+    select = '<test><animals><animal><name>cat</name></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -292,19 +292,19 @@ def test_get_subtree_select_one_node():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_select_one_elements():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal><name>cat</name><type/></animal></animals></test>'
+    select = '<test><animals><animal><name>cat</name><type/></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(xml)
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -312,19 +312,19 @@ def test_get_subtree_select_one_elements():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_select_multi():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal><name>cat</name></animal><animal><name>dog</name></animal></animals></test>'
+    select = '<test><animals><animal><name>cat</name></animal><animal><name>dog</name></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(xml)
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -336,20 +336,20 @@ def test_get_subtree_select_multi():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 @pytest.mark.skip(reason="does not work - notsure how to parse attributes in libnetconf2?")
 def test_get_subtree_select_attr_named():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><animals><animal name="cat"/></animals></test>'
+    select = '<test><animals><animal name="cat"/></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     print(xml)
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -357,13 +357,13 @@ def test_get_subtree_select_attr_named():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(xml, expected) == None
     m.close_session()
 
 def test_get_subtree_unknown():
-    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><unknown/></test>'
+    select = '<test><unknown/></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     assert xml.tag == '{urn:ietf:params:xml:ns:netconf:base:1.0}data'
@@ -382,13 +382,13 @@ def test_get_xpath_node():
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <settings>
             <debug>enable</debug>
         </settings>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(expected, xml) == None
     m.close_session()
@@ -398,15 +398,15 @@ def test_get_xpath_trunk():
     xml = m.get(filter=('xpath', '/test/settings')).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <settings>
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
         </settings>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(expected, xml) == None
     m.close_session()
@@ -416,8 +416,8 @@ def test_get_xpath_list_trunk():
     xml = m.get(filter=('xpath', '/test/animals')).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -434,7 +434,7 @@ def test_get_xpath_list_trunk():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(expected, xml) == None
     m.close_session()
@@ -446,8 +446,8 @@ def test_get_xpath_list_select_one_trunk():
     xml = m.get(filter=('xpath', xpath)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -455,7 +455,7 @@ def test_get_xpath_list_select_one_trunk():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(expected, xml) == None
     m.close_session()
@@ -466,8 +466,8 @@ def test_get_xpath_list_select_one_parameter():
     xml = m.get(filter=('xpath', xpath)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -475,7 +475,7 @@ def test_get_xpath_list_select_one_parameter():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(expected, xml) == None
     m.close_session()
@@ -487,8 +487,8 @@ def test_xpath_query_multi():
     xml = m.get(filter=('xpath', xpath)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     expected = toXML("""
-<data xmlns="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test xmlns="https://github.com/alliedtelesis/apteryx">
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
         <animals>
             <animal>
                 <name>cat</name>
@@ -498,7 +498,7 @@ def test_xpath_query_multi():
             </animal>
         </animals>
     </test>
-</data>
+</nc:data>
     """)
     assert diffXML(expected, xml) == None
     m.close_session()
@@ -521,7 +521,7 @@ def test_edit_config_node():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <priority>99</priority>
     </settings>
@@ -537,7 +537,7 @@ def test_edit_config_multi():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <enable>false</enable>
         <priority>99</priority>
@@ -555,7 +555,7 @@ def test_edit_config_list():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <animals>
         <animal>
             <name>frog</name>
@@ -579,7 +579,7 @@ def test_edit_config_delete_invalid_path():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <missing operation="delete">1</missing>
     </settings>
@@ -595,7 +595,7 @@ def test_edit_config_delete_node():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <priority xc:operation="delete">1</priority>
     </settings>
@@ -612,7 +612,7 @@ def test_edit_config_delete_no_data():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <priority xc:operation="delete">1</priority>
     </settings>
@@ -630,7 +630,7 @@ def test_edit_config_delete_multi():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <enable xc:operation="delete">true</enable>
         <priority xc:operation="delete">1</priority>
@@ -650,7 +650,7 @@ def test_edit_config_delete_trunk():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings xc:operation="delete" />
   </test>
 </config>
@@ -667,7 +667,7 @@ def test_edit_config_delete_list():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <animals>
         <animal xc:operation="delete">
             <name>cat</name>
@@ -688,7 +688,7 @@ def test_edit_config_merge_delete():
     m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test xmlns="https://github.com/alliedtelesis/apteryx">
+  <test>
     <settings>
         <enable>false</enable>
         <priority xc:operation="delete">1</priority>

@@ -2,8 +2,9 @@
 ROOT=`pwd`
 
 # Check required libraries and tools
-if ! pkg-config --exists glib-2.0 gio-2.0 openssl; then
-        echo "Please install glib-2.0 (sudo apt-get install libglib2.0-dev openssl)"
+if ! pkg-config --exists glib-2.0 libxml-2.0 cunit; then
+        echo "Please install glib-2.0, libxml-2.0 and cunit"
+        echo "(sudo apt-get install libglib2.0-dev libxml2-dev libcunit1-dev)"
         exit 1
 fi
 
@@ -25,31 +26,16 @@ if [ ! -f apteryx/libapteryx.so ]; then
         cd $BUILD
 fi
 
-# Check libyang
-if [ ! -d libyang ]; then
+# Check Apteryx XML Schema library
+if [ ! -d apteryx-xml ]; then
         echo "Building libyang from source."
-        git clone --depth 1 --branch v2.0.97 https://github.com/CESNET/libyang.git
+        git clone --depth 1 https://github.com/alliedtelesis/apteryx-xml.git
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 fi
-if [ ! -f libyang/build/libyang.so ]; then
-        cd libyang; mkdir build; cd build
-        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib ..
-        make install DESTDIR=$BUILD
-        rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
-        ln -s src libyang
-        cd $BUILD
-fi
-
-# Check libnetconf2
-if [ ! -d libnetconf2 ]; then
-        echo "Building libnetconf2 from source."
-        git clone --depth 1 --branch v2.0.19 https://github.com/CESNET/libnetconf2.git
-        rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
-fi
-if [ ! -f libnetconf2/build/libnetconf2.so ]; then
-        cd libnetconf2; mkdir -p build; cd build
-        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INCLUDE_PATH=$BUILD/usr/include \
-            -DCMAKE_LIBRARY_PATH=$BUILD/usr/lib/ -DENABLE_TLS=OFF -DENABLE_SSH=OFF -DENABLE_DNSSEC=OFF ..
+if [ ! -f apteryx-xml/apteryx-schema.so ]; then
+        cd apteryx-xml
+        rm $BUILD/usr/lib/libapteryx-xml.so
+        rm $BUILD/usr/lib/libapteryx-schema.so
         make install DESTDIR=$BUILD
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
         cd $BUILD
@@ -89,7 +75,7 @@ export PKG_CONFIG_PATH=$BUILD/usr/lib/pkgconfig
 if [ ! -f $BUILD/../Makefile ]; then
     cd $BUILD/../
     ./autogen.sh
-    ./configure
+    ./configure APTERYX_XML_CFLAGS=-I$BUILD/usr/include APTERYX_XML_LIBS=-lapteryx-schema
     rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
     cd $BUILD
 fi
@@ -98,6 +84,7 @@ rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 
 # Start Apteryx and populate the database
 export LD_LIBRARY_PATH=$BUILD/usr/lib
+rm -f /tmp/apteryx
 $BUILD/usr/bin/apteryxd -b
 
 # Start sshd
@@ -110,7 +97,7 @@ sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 # TEST_WRAPPER="valgrind --tool=cachegrind"
 sudo LD_LIBRARY_PATH=$BUILD/usr/lib \
     LIBYANG_USER_TYPES_PLUGINS_DIR=$BUILD/src/user_types \
-    $TEST_WRAPPER ../src/apteryx-netconf -v --models $BUILD/../models/ --unix $BUILD/apteryx-netconf.sock
+    $TEST_WRAPPER ../apteryx-netconf -v --models $BUILD/../models/ --unix $BUILD/apteryx-netconf.sock
 rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 
 # Stop restconf
