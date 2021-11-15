@@ -32,10 +32,10 @@ if [ ! -d apteryx-xml ]; then
         git clone --depth 1 https://github.com/alliedtelesis/apteryx-xml.git
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 fi
-if [ ! -f apteryx-xml/apteryx-schema.so ]; then
+if [ ! -f apteryx-xml/libapteryx-schema.so ]; then
         cd apteryx-xml
-        rm $BUILD/usr/lib/libapteryx-xml.so
-        rm $BUILD/usr/lib/libapteryx-schema.so
+        rm -f $BUILD/usr/lib/libapteryx-xml.so
+        rm -f $BUILD/usr/lib/libapteryx-schema.so
         make install DESTDIR=$BUILD
         rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
         cd $BUILD
@@ -92,6 +92,7 @@ sudo useradd -M -p $(perl -e 'print crypt($ARGV[0], "password")' 'friend') manag
 sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 
 # Start restconf
+rm -f $BUILD/apteryx-netconf.sock
 # TEST_WRAPPER="gdb -ex run --args"
 # TEST_WRAPPER="valgrind --leak-check=full"
 # TEST_WRAPPER="valgrind --tool=cachegrind"
