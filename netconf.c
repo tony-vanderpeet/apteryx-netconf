@@ -387,6 +387,26 @@ xpath_to_query (sch_node * schema, const char *xpath, int depth)
     return rnode;
 }
 
+static GNode*
+get_full_tree ()
+{
+    GNode *tree = APTERYX_NODE (NULL, g_strdup_printf ("/"));
+    GList *children, *iter;
+
+    /* Search root and then get tree for each root entry */
+    children = apteryx_search ("/");
+    for (iter = children; iter; iter = g_list_next (iter))
+    {
+        const char *path = (const char *) iter->data;
+        GNode *subtree = apteryx_get_tree (path);
+        g_free (subtree->data);
+        subtree->data = g_strdup (path + 1);
+        g_node_append (tree, subtree);
+    }
+    g_list_free_full (children, free);
+    return tree;
+}
+
 static bool
 handle_get (struct netconf_session *session, xmlNode * rpc)
 {
@@ -395,7 +415,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
     char *attr;
     GNode *query = NULL;
     GNode *tree;
-    xmlNode *xml;
+    xmlNode *xml = NULL;
 
     /* Check the data store */
     if (g_strcmp0 ((char *) action->name, "get-config") == 0)
@@ -429,7 +449,13 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
         }
         else if (g_strcmp0 (attr, "subtree") == 0)
         {
-            query = sch_xml_to_gnode (g_schema, NULL, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
+            query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
+            if (!query)
+            {
+                VERBOSE ("SUBTREE: malformed query\n");
+                free (attr);
+                return send_rpc_error (session, rpc, "malformed-message");
+            }
         }
         else
         {
@@ -440,19 +466,18 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
         free (attr);
     }
 
-    /* Parse with-defaults */
+    //TODO - Parse with-defaults 
 
     /* Query database */
-    DEBUG ("NETCONF: GET %s\n", query ? APTERYX_NAME (query) : "NULL");
-    tree = query ? apteryx_query (query) : NULL;
+    DEBUG ("NETCONF: GET %s\n", query ? APTERYX_NAME (query) : "/");
+    tree = query ? apteryx_query (query) : get_full_tree ();
     apteryx_free_tree (query);
 
-    //TODO - with-defaults 
-
     /* Convert result to XML */
-    xml = tree ? sch_gnode_to_xml (g_schema, NULL, NULL, tree, 0) : NULL;
+    xml = tree ? sch_gnode_to_xml (g_schema, NULL, tree, 0) : NULL;
     apteryx_free_tree (tree);
 
+    /* Send response */
     send_rpc_data (session, rpc, xml);
 
     return true;
@@ -503,7 +528,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     }
 
     /* Convert to gnode */
-    tree = sch_xml_to_gnode (g_schema, NULL, NULL, xmlFirstElementChild (node), 0);
+    tree = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), 0);
 
     //TODO - permissions
     //TODO - patterns

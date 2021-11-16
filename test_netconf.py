@@ -94,13 +94,14 @@ def test_server_capabilities():
 
 # GET SUBTREE
 
-@pytest.mark.skip(reason="does not work yet - get_tree does not let you grab the root of the world!")
 def test_get_subtree_no_filter():
     m = connect()
     xml = m.get().data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     # Full tree should be returned
-    assert xml.find('./{*}test/{*}debug').text == 'enable'
+    assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
+    assert xml.find('./{*}test/{*}state/{*}counter').text == '42'
+    assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     m.close_session()
 
 @pytest.mark.skip(reason="does not work yet - ncclient does not allow empty filter strings")
@@ -109,7 +110,9 @@ def test_get_subtree_empty_filter():
     xml = m.get(filter=('subtree', "")).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     # Nothing should be returned
-    assert xml.find('./{*}test/{*}debug').text != 'enable'
+    assert xml.find('./{*}test/{*}settings/{*}debug').text != 'enable'
+    assert xml.find('./{*}test/{*}state/{*}counter').text != '42'
+    assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text != 'cat'
     m.close_session()
 
 def test_get_subtree_node():
@@ -195,7 +198,6 @@ def test_get_subtree_list_container():
     assert diffXML(xml, expected) == None
     m.close_session()
 
-@pytest.mark.skip(reason="does not work - rfc6241:6.4.3 - broken libnetconf2?")
 def test_get_subtree_list_element():
     select = '<test><animals><animal/></animals></test>'
     m = connect()
@@ -362,8 +364,8 @@ def test_get_subtree_select_attr_named():
     assert diffXML(xml, expected) == None
     m.close_session()
 
-def test_get_subtree_unknown():
-    select = '<test><unknown/></test>'
+def test_get_subtree_missing():
+    select = '<test><animals><animal><name>elephant</name></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
     assert xml.tag == '{urn:ietf:params:xml:ns:netconf:base:1.0}data'
@@ -439,7 +441,6 @@ def test_get_xpath_list_trunk():
     assert diffXML(expected, xml) == None
     m.close_session()
 
-# @pytest.mark.skip(reason="does not work yet")
 def test_get_xpath_list_select_one_trunk():
     xpath = "/test/animals/animal[name='cat']"
     m = connect()
@@ -510,7 +511,10 @@ def test_get_config():
     m = connect()
     xml = m.get_config(source='running').data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    # Full tree should be returned with config only
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
+    assert xml.find('./{*}test/{*}state/{*}counter').text != '42'
+    assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     # Ignore the rest!
     m.close_session()
 
