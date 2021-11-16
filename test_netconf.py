@@ -104,15 +104,14 @@ def test_get_subtree_no_filter():
     assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     m.close_session()
 
-@pytest.mark.skip(reason="does not work yet - ncclient does not allow empty filter strings")
 def test_get_subtree_empty_filter():
     m = connect()
-    xml = m.get(filter=('subtree', "")).data
+    # ncclient does not allow empty filter strings - so make our own rpc
+    rpc = """<get><filter type="subtree"></filter></get>"""
+    xml = to_ele(m.rpc(to_ele(rpc)).xml)
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    # Nothing should be returned
-    assert xml.find('./{*}test/{*}settings/{*}debug').text != 'enable'
-    assert xml.find('./{*}test/{*}state/{*}counter').text != '42'
-    assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text != 'cat'
+    # Nothing but an rpc-reply with an empty data attribute should be returned
+    assert len(xml) and len(xml[0]) == 0
     m.close_session()
 
 def test_get_subtree_node():

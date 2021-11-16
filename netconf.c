@@ -449,6 +449,11 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
         }
         else if (g_strcmp0 (attr, "subtree") == 0)
         {
+            if (!xmlFirstElementChild (node)) {
+                VERBOSE ("SUBTREE: empty query\n");
+                free (attr);
+                return send_rpc_data (session, rpc, NULL);
+            }
             query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
             if (!query)
             {
