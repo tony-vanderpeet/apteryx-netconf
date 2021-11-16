@@ -346,9 +346,17 @@ xpath_to_query (sch_node * schema, const char *xpath, int depth)
                 g_node_prepend (rnode, child);
                 depth++;
                 VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
+                if (next) {
+                    APTERYX_NODE (child, g_strdup (key));
+                    depth++;
+                    VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
+                }
             }
             g_free (pred);
         }
+
+        if (sch_is_list (schema))
+            schema = sch_node_child_first (schema);
 
         if (next)
         {
@@ -384,7 +392,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
 {
     xmlNode *action = xmlFirstElementChild (rpc);
     xmlNode *node;
-    const char *attr;
+    char *attr;
     GNode *query = NULL;
     GNode *tree;
     xmlNode *xml;
@@ -392,22 +400,25 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
     /* Check the data store */
     if (g_strcmp0 ((char *) action->name, "get-config") == 0)
     {
-        attr = (const char *) xmlGetProp (action, BAD_CAST "source");
+        attr = (char *) xmlGetProp (action, BAD_CAST "source");
         if (g_strcmp0 (attr, "running") != 0)
         {
             VERBOSE ("Datastore \"%s\" not supported", attr);
+            free (attr);
             return send_rpc_error (session, rpc, "operation-not-supported");
         }
+        free (attr);
     }
 
     /* Parse any filters */
     node = xmlFirstElementChild (action);
     if (node && g_strcmp0 ((char *) node->name, "filter") == 0)
     {
-        attr = (const char *) xmlGetProp (node, BAD_CAST "type");
+        attr = (char *) xmlGetProp (node, BAD_CAST "type");
         if (g_strcmp0 (attr, "xpath") == 0)
         {
-            attr = (const char *) xmlGetProp (node, BAD_CAST "select");
+            free (attr);
+            attr = (char *) xmlGetProp (node, BAD_CAST "select");
             if (!attr)
             {
                 VERBOSE ("XPATH filter missing select attribute");
@@ -418,13 +429,15 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
         }
         else if (g_strcmp0 (attr, "subtree") == 0)
         {
-            query = sch_xml_to_gnode (g_schema, NULL, NULL, xmlFirstElementChild (node), 0);
+            query = sch_xml_to_gnode (g_schema, NULL, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
         }
         else
         {
             VERBOSE ("FILTER: unsupported/missing type (%s)\n", attr);
+            free (attr);
             return send_rpc_error (session, rpc, "operation-not-supported");
         }
+        free (attr);
     }
 
     /* Parse with-defaults */
@@ -659,6 +672,8 @@ netconf_handle_session (int fd)
         {
             VERBOSE ("Closing session\n");
             send_rpc_ok (session, rpc);
+            xmlFreeDoc (doc);
+            g_free (message);
             break;
         }
         else if (g_strcmp0 ((char *) child->name, "get") == 0 ||
@@ -676,6 +691,8 @@ netconf_handle_session (int fd)
         {
             VERBOSE ("Unknown RPC (%s)\n", child->name);
             send_rpc_error (session, rpc, "operation-not-supported");
+            xmlFreeDoc (doc);
+            g_free (message);
             break;
         }
 

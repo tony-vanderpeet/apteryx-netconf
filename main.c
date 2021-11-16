@@ -102,6 +102,7 @@ main (int argc, char *argv[])
         g_print ("%s", g_option_context_get_help (context, FALSE, NULL));
         g_error ("%s\n", error->message);
     }
+    g_option_context_free (context);
 
     /* Initialization */
     apteryx_init (apteryx_netconf_verbose);
