@@ -104,9 +104,10 @@ send_rpc_error (struct netconf_session *session, xmlNode * rpc, const char *erro
                 BAD_CAST "urn:ietf:params:xml:ns:netconf:base:1.0");
     xmlDocSetRootElement (doc, root);
     child = xmlNewChild (root, NULL, BAD_CAST "nc:rpc-error", NULL);
-    xmlNewChild (child, NULL, BAD_CAST "error-type", BAD_CAST "rpc");
-    xmlNewChild (child, NULL, BAD_CAST "error-tag", BAD_CAST error);
-    xmlNewChild (child, NULL, BAD_CAST "error-severity", BAD_CAST "error");
+    xmlNewChild (child, NULL, BAD_CAST "nc:error-tag", BAD_CAST error);
+    xmlNewChild (child, NULL, BAD_CAST "nc:error-type", BAD_CAST "rpc");
+    xmlNewChild (child, NULL, BAD_CAST "nc:error-severity", BAD_CAST "error");
+    xmlNewChild (child, NULL, BAD_CAST "nc:error-info", BAD_CAST NULL);
     xmlDocDumpMemoryEnc (doc, &xmlbuff, &len, "UTF-8");
     header = g_strdup_printf ("\n#%d\n", len);
 
@@ -534,6 +535,11 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
 
     /* Convert to gnode */
     tree = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), 0);
+    if (!tree)
+    {
+        VERBOSE ("SETTREE: malformed tree\n");
+        return send_rpc_error (session, rpc, "malformed-message");
+    }
 
     //TODO - permissions
     //TODO - patterns

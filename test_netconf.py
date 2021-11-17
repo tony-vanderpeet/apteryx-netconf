@@ -1,6 +1,7 @@
 import os
 import pytest
 from ncclient import manager
+from ncclient.operations import RPCError
 from ncclient.xml_ import to_ele
 from lxml import etree
 
@@ -596,7 +597,6 @@ def test_edit_config_list():
 
 # EDIT-CONFIG (operation="delete")
 
-@pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_invalid_path():
     m = connect()
     payload = """
@@ -608,9 +608,11 @@ def test_edit_config_delete_invalid_path():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    assert 'data-missing' in response.xml
+    try:
+        response = m.edit_config(target='running', config=payload)
+    except RPCError as err:
+        print(err)
+        assert err.tag == 'malformed-message'
     m.close_session()
 
 def test_edit_config_delete_node():
@@ -643,9 +645,11 @@ def test_edit_config_delete_no_data():
 """
     response = m.edit_config(target='running', config=payload)
     print(response)
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    assert 'data-missing' in response.xml
+    try:
+        response = m.edit_config(target='running', config=payload)
+    except RPCError as err:
+        print(err)
+        assert err.tag == 'data-missing'
     m.close_session()
 
 def test_edit_config_delete_multi():
