@@ -342,8 +342,7 @@ def test_get_subtree_select_multi():
     assert diffXML(xml, expected) == None
     m.close_session()
 
-@pytest.mark.skip(reason="does not work - notsure how to parse attributes in libnetconf2?")
-def test_get_subtree_select_attr_named():
+def test_get_subtree_select_attr_named_only():
     select = '<test><animals><animal name="cat"/></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
@@ -355,6 +354,26 @@ def test_get_subtree_select_attr_named():
             <animal>
                 <name>cat</name>
                 <type>big</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """)
+    assert diffXML(xml, expected) == None
+    m.close_session()
+
+def test_get_subtree_select_attr_named_element():
+    select = '<test><animals><animal name="mouse"><type/></animal></animals></test>'
+    m = connect()
+    xml = m.get(filter=('subtree', select)).data
+    print(xml)
+    expected = toXML("""
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <animals>
+            <animal>
+                <name>mouse</name>
+                <type>little</type>
             </animal>
         </animals>
     </test>
