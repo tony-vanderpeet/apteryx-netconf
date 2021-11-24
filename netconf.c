@@ -286,108 +286,6 @@ handle_hello (struct netconf_session *session)
     return ret;
 }
 
-static GNode *
-xpath_to_query (sch_node * schema, const char *xpath, int depth)
-{
-    const char *next;
-    GNode *node = NULL;
-    GNode *rnode = NULL;
-    GNode *child = NULL;
-    char *name;
-    char *pred;
-
-    if (xpath && xpath[0] == '/')
-    {
-        xpath++;
-
-        /* Find name */
-        next = strchr (xpath, '/');
-        if (next)
-            name = strndup (xpath, next - xpath);
-        else
-            name = strdup (xpath);
-        pred = strchr (name, '[');
-        if (pred)
-        {
-            char *temp = strndup (name, pred - name);
-            pred = strdup (pred);
-            g_free (name);
-            name = temp;
-        }
-
-        /* Find schema node */
-        if (!schema)
-            schema = sch_lookup (g_schema, name);
-        else
-            schema = sch_node_child (schema, name);
-        if (schema == NULL)
-        {
-            ERROR ("ERROR: No match for %s\n", name);
-            return NULL;
-        }
-
-        /* Create node */
-        if (depth == 0)
-        {
-            rnode = APTERYX_NODE (NULL, g_strdup_printf ("/%s", name));
-            g_free (name);
-        }
-        else
-            rnode = APTERYX_NODE (NULL, name);
-        VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (rnode));
-
-        //TODO - properly parse predicates
-        if (pred && sch_is_list (schema)) {
-            char key[128 + 1];
-            char value[128 + 1];
-
-            if (sscanf (pred, "[%128[^=]='%128[^']']", key, value) == 2) {
-                // TODO make sure this key is the list key
-                child = APTERYX_NODE (NULL, g_strdup (value));
-                g_node_prepend (rnode, child);
-                depth++;
-                VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
-                if (next) {
-                    APTERYX_NODE (child, g_strdup (key));
-                    depth++;
-                    VERBOSE ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
-                }
-            }
-            g_free (pred);
-        }
-
-        if (sch_is_list (schema))
-            schema = sch_node_child_first (schema);
-
-        if (next)
-        {
-            node = xpath_to_query (schema, next, depth + 1);
-            if (!node)
-            {
-                g_node_destroy (rnode);
-                return NULL;
-            }
-            g_node_prepend (child ? : rnode, node);
-        }
-        else if (sch_node_child_first (schema))
-        {
-            /* Get everything from here down if we do not already have a star */
-            if (child && g_strcmp0 (APTERYX_NAME (child), "*") != 0)
-            {
-                APTERYX_NODE (child, g_strdup ("*"));
-                VERBOSE ("%*s%s\n", (depth + 1) * 2, " ", "*");
-            }
-            else if (g_strcmp0 (APTERYX_NAME (rnode), "*") != 0)
-            {
-                APTERYX_NODE (rnode, g_strdup ("*"));
-                VERBOSE ("%*s%s\n", (depth + 1) * 2, " ", "*");
-            }
-        }
-    }
-
-    return rnode;
-}
-
 static GNode*
 get_full_tree ()
 {
@@ -446,7 +344,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
                 return send_rpc_error (session, rpc, "missing-attribute");
             }
             VERBOSE ("FILTER: XPATH: %s\n", attr);
-            query = xpath_to_query (NULL, attr, 0);
+            query = sch_path_to_query (g_schema, NULL, attr, SCH_F_XPATH);
         }
         else if (g_strcmp0 (attr, "subtree") == 0)
         {
