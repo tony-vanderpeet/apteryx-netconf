@@ -315,6 +315,10 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
     GNode *query = NULL;
     GNode *tree;
     xmlNode *xml = NULL;
+    int schflags = 0;
+
+    if (apteryx_netconf_verbose)
+        schflags |= SCH_F_DEBUG;
 
     /* Check the data store */
     if (g_strcmp0 ((char *) action->name, "get-config") == 0)
@@ -344,7 +348,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
                 return send_rpc_error (session, rpc, "missing-attribute");
             }
             VERBOSE ("FILTER: XPATH: %s\n", attr);
-            query = sch_path_to_query (g_schema, NULL, attr, SCH_F_XPATH);
+            query = sch_path_to_query (g_schema, NULL, attr, schflags | SCH_F_XPATH);
         }
         else if (g_strcmp0 (attr, "subtree") == 0)
         {
@@ -378,7 +382,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
     apteryx_free_tree (query);
 
     /* Convert result to XML */
-    xml = tree ? sch_gnode_to_xml (g_schema, NULL, tree, 0) : NULL;
+    xml = tree ? sch_gnode_to_xml (g_schema, NULL, tree, schflags) : NULL;
     apteryx_free_tree (tree);
 
     /* Send response */
@@ -408,6 +412,10 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     xmlNode *action = xmlFirstElementChild (rpc);
     xmlNode *node;
     GNode *tree = NULL;
+    int schflags = 0;
+
+    if (apteryx_netconf_verbose)
+        schflags |= SCH_F_DEBUG;
 
     /* Check the target */
     node = xmlFindNodeByName (action, BAD_CAST "target");
@@ -432,7 +440,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     }
 
     /* Convert to gnode */
-    tree = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), 0);
+    tree = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags);
     if (!tree)
     {
         VERBOSE ("SETTREE: malformed tree\n");
