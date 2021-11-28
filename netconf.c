@@ -347,8 +347,14 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
                 VERBOSE ("XPATH filter missing select attribute");
                 return send_rpc_error (session, rpc, "missing-attribute");
             }
-            VERBOSE ("FILTER: XPATH: %s\n", attr);
+            VERBOSE ("XPATH: %s\n", attr);
             query = sch_path_to_query (g_schema, NULL, attr, schflags | SCH_F_XPATH);
+            if (!query)
+            {
+                VERBOSE ("XPATH: malformed path\n");
+                free (attr);
+                return send_rpc_error (session, rpc, "malformed-message");
+            }
         }
         else if (g_strcmp0 (attr, "subtree") == 0)
         {
