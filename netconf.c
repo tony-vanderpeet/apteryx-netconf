@@ -298,9 +298,12 @@ get_full_tree ()
     {
         const char *path = (const char *) iter->data;
         GNode *subtree = apteryx_get_tree (path);
-        g_free (subtree->data);
-        subtree->data = g_strdup (path + 1);
-        g_node_append (tree, subtree);
+        if (subtree)
+        {
+            g_free (subtree->data);
+            subtree->data = g_strdup (path + 1);
+            g_node_append (tree, subtree);
+        }
     }
     g_list_free_full (children, free);
     return tree;
