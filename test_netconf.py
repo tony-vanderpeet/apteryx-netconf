@@ -525,8 +525,26 @@ def test_xpath_query_multi():
 
 # GET-CONFIG
 
+def test_get_config_simple_node():
+    m = connect()
+    xml = m.get_config(source='running', filter=('xpath', "/test/settings/debug")).data
+    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
+    m.close_session()
+
+def test_get_config_unsupported_datastore():
+    m = connect()
+    response = None
+    try:
+        response = m.get_config(source='candidate', filter=('xpath', "/test/settings/debug"))
+    except RPCError as err:
+        print(err)
+        assert err.tag == 'operation-not-supported'
+    assert response == None, 'Should have received an RPCError'
+    m.close_session()
+
 @pytest.mark.skip(reason="does not work yet")
-def test_get_config():
+def test_get_config_no_state():
     m = connect()
     xml = m.get_config(source='running').data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))

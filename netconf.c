@@ -320,67 +320,61 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
 
-    /* Check the data store */
-    if (g_strcmp0 ((char *) action->name, "get-config") == 0)
+    /* Parse options */
+    for (node = xmlFirstElementChild (action); node; node = xmlNextElementSibling (node))
     {
-        attr = (char *) xmlGetProp (action, BAD_CAST "source");
-        if (g_strcmp0 (attr, "running") != 0)
+        /* Check the requested datastore */
+        if (g_strcmp0 ((char *) node->name, "source") == 0)
         {
-            VERBOSE ("Datastore \"%s\" not supported", attr);
-            free (attr);
-            return send_rpc_error (session, rpc, "operation-not-supported");
+            if (!xmlFirstElementChild (node) ||
+                g_strcmp0 ((char *) xmlFirstElementChild (node)->name, "running") != 0)
+            {
+                VERBOSE ("Datastore \"%s\" not supported",
+                        (char *) xmlFirstElementChild (node)->name);
+                return send_rpc_error (session, rpc, "operation-not-supported");
+            }
         }
-        free (attr);
+        /* Parse any filters */
+        else if (g_strcmp0 ((char *) node->name, "filter") == 0)
+        {
+            attr = (char *) xmlGetProp (node, BAD_CAST "type");
+            if (g_strcmp0 (attr, "xpath") == 0)
+            {
+                free (attr);
+                attr = (char *) xmlGetProp (node, BAD_CAST "select");
+                if (!attr)
+                {
+                    VERBOSE ("XPATH filter missing select attribute");
+                    return send_rpc_error (session, rpc, "missing-attribute");
+                }
+                VERBOSE ("FILTER: XPATH: %s\n", attr);
+                query = sch_path_to_query (g_schema, NULL, attr, schflags | SCH_F_XPATH);
+            }
+            else if (g_strcmp0 (attr, "subtree") == 0)
+            {
+                if (!xmlFirstElementChild (node)) {
+                    VERBOSE ("SUBTREE: empty query\n");
+                    free (attr);
+                    return send_rpc_data (session, rpc, NULL);
+                }
+                query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
+                if (!query)
+                {
+                    VERBOSE ("SUBTREE: malformed query\n");
+                    free (attr);
+                    return send_rpc_error (session, rpc, "malformed-message");
+                }
+            }
+            else
+            {
+                VERBOSE ("FILTER: unsupported/missing type (%s)\n", attr);
+                free (attr);
+                return send_rpc_error (session, rpc, "operation-not-supported");
+            }
+            free (attr);
+        }
+        //TODO - Parse with-defaults 
     }
-
-    /* Parse any filters */
-    node = xmlFirstElementChild (action);
-    if (node && g_strcmp0 ((char *) node->name, "filter") == 0)
-    {
-        attr = (char *) xmlGetProp (node, BAD_CAST "type");
-        if (g_strcmp0 (attr, "xpath") == 0)
-        {
-            free (attr);
-            attr = (char *) xmlGetProp (node, BAD_CAST "select");
-            if (!attr)
-            {
-                VERBOSE ("XPATH filter missing select attribute");
-                return send_rpc_error (session, rpc, "missing-attribute");
-            }
-            VERBOSE ("XPATH: %s\n", attr);
-            query = sch_path_to_query (g_schema, NULL, attr, schflags | SCH_F_XPATH);
-            if (!query)
-            {
-                VERBOSE ("XPATH: malformed path\n");
-                free (attr);
-                return send_rpc_error (session, rpc, "malformed-message");
-            }
-        }
-        else if (g_strcmp0 (attr, "subtree") == 0)
-        {
-            if (!xmlFirstElementChild (node)) {
-                VERBOSE ("SUBTREE: empty query\n");
-                free (attr);
-                return send_rpc_data (session, rpc, NULL);
-            }
-            query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
-            if (!query)
-            {
-                VERBOSE ("SUBTREE: malformed query\n");
-                free (attr);
-                return send_rpc_error (session, rpc, "malformed-message");
-            }
-        }
-        else
-        {
-            VERBOSE ("FILTER: unsupported/missing type (%s)\n", attr);
-            free (attr);
-            return send_rpc_error (session, rpc, "operation-not-supported");
-        }
-        free (attr);
-    }
-
-    //TODO - Parse with-defaults 
 
     /* Query database */
     DEBUG ("NETCONF: GET %s\n", query ? APTERYX_NAME (query) : "/");
