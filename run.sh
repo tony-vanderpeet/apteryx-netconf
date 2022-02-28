@@ -109,8 +109,6 @@ rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 # Stop restconf
 sudo killall apteryx-netconf
 sudo rm /tmp/apteryx-netconf
-# Stop sshd
-sudo kill `pidof $BUILD/usr/sbin/sshd`
 sudo userdel manager
 # Stop Apteryx
 $BUILD/usr/bin/apteryx -t
