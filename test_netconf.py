@@ -105,10 +105,12 @@ def test_get_subtree_no_filter():
     assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     m.close_session()
 
+@pytest.mark.skip(reason="exception creating RPC")
 def test_get_subtree_empty_filter():
     m = connect()
     # ncclient does not allow empty filter strings - so make our own rpc
     rpc = """<get><filter type="subtree"></filter></get>"""
+
     xml = to_ele(m.rpc(to_ele(rpc)).xml)
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     # Nothing but an rpc-reply with an empty data attribute should be returned
@@ -303,7 +305,6 @@ def test_get_subtree_select_one_elements():
     select = '<test><animals><animal><name>cat</name><type/></animal></animals></test>'
     m = connect()
     xml = m.get(filter=('subtree', select)).data
-    print(xml)
     expected = toXML("""
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
