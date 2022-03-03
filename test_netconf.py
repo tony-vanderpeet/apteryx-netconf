@@ -7,12 +7,12 @@ from lxml import etree
 
 # TEST CONFIGURATION
 
-host='localhost'
-port=830
-username='manager'
-password='friend'
+host = 'localhost'
+port = 830
+username = 'manager'
+password = 'friend'
 
-APTERYX='LD_LIBRARY_PATH=.build/usr/lib .build/usr/bin/apteryx'
+APTERYX = 'LD_LIBRARY_PATH=.build/usr/lib .build/usr/bin/apteryx'
 
 # TEST HELPERS
 
@@ -30,34 +30,40 @@ db_default = [
     ('/test/animals/animal/mouse/colour', 'grey'),
 ]
 
+
 @pytest.fixture(autouse=True)
 def run_around_tests():
     # Before test
     os.system("echo Before test")
     os.system("%s -r /test" % (APTERYX))
-    for path,value in db_default:
+    for path, value in db_default:
         os.system("%s -s %s %s" % (APTERYX, path, value))
     yield
     # After test
     os.system("echo After test")
     os.system("%s -r /test" % (APTERYX))
 
+
 def connect():
     return manager.connect(host=host,
-                    port=port,
-                    username=username,
-                    password=password,
-                    hostkey_verify=False,
-                    allow_agent=False,
-                    look_for_keys=False)
+                           port=port,
+                           username=username,
+                           password=password,
+                           hostkey_verify=False,
+                           allow_agent=False,
+                           look_for_keys=False)
+
 
 def toXML(xml_str):
     parser = etree.XMLParser(remove_blank_text=True)
     return etree.XML(xml_str, parser=parser)
 
+
 def diffXML(a, b):
-    if len(a) != len(b): return "len(%s) != len(%s)" % (a.tag, b.tag)
-    if a.tag != b.tag: return "%s != %s" % (a.tag, b.tag)
+    if len(a) != len(b):
+        return "len(%s) != len(%s)" % (a.tag, b.tag)
+    if a.tag != b.tag:
+        return "%s != %s" % (a.tag, b.tag)
     if a is not None and len(a):
         for ae, be in zip(a, b):
             cmp = diffXML(ae, be)
@@ -72,6 +78,7 @@ def diffXML(a, b):
     return None
 
 # CAPABILITIES
+
 
 def test_server_capabilities():
     m = connect()
@@ -95,6 +102,7 @@ def test_server_capabilities():
 
 # GET SUBTREE
 
+
 def test_get_subtree_no_filter():
     m = connect()
     xml = m.get().data
@@ -104,6 +112,7 @@ def test_get_subtree_no_filter():
     assert xml.find('./{*}test/{*}state/{*}counter').text == '42'
     assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     m.close_session()
+
 
 @pytest.mark.skip(reason="exception creating RPC")
 def test_get_subtree_empty_filter():
@@ -116,6 +125,7 @@ def test_get_subtree_empty_filter():
     # Nothing but an rpc-reply with an empty data attribute should be returned
     assert len(xml) and len(xml[0]) == 0
     m.close_session()
+
 
 def test_get_subtree_node():
     select = '<test><settings><debug/></settings></test>'
@@ -131,8 +141,9 @@ def test_get_subtree_node():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_trunk():
     select = '<test><settings/></test>'
@@ -150,8 +161,9 @@ def test_get_subtree_trunk():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_multi_parameters():
     select = '<test><settings><debug/><priority/></settings></test>'
@@ -168,8 +180,9 @@ def test_get_subtree_multi_parameters():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_list_container():
     select = '<test><animals/></test>'
@@ -197,8 +210,9 @@ def test_get_subtree_list_container():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_list_element():
     select = '<test><animals><animal/></animals></test>'
@@ -226,8 +240,9 @@ def test_get_subtree_list_element():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_list_parameter():
     select = '<test><animals><animal><name/></animal></animals></test>'
@@ -251,8 +266,9 @@ def test_get_subtree_list_parameter():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_selection_multi():
     select = '<test><animals><animal><name/><type/></animal></animals></test>'
@@ -278,8 +294,9 @@ def test_get_subtree_selection_multi():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_select_one_node():
     select = '<test><animals><animal><name>cat</name></animal></animals></test>'
@@ -298,8 +315,9 @@ def test_get_subtree_select_one_node():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_select_one_elements():
     select = '<test><animals><animal><name>cat</name><type/></animal></animals></test>'
@@ -317,8 +335,9 @@ def test_get_subtree_select_one_elements():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_select_multi():
     select = '<test><animals><animal><name>cat</name></animal><animal><name>dog</name></animal></animals></test>'
@@ -341,8 +360,9 @@ def test_get_subtree_select_multi():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_select_attr_named_only():
     select = '<test><animals><animal name="cat"/></animals></test>'
@@ -361,8 +381,9 @@ def test_get_subtree_select_attr_named_only():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_select_attr_named_element():
     select = '<test><animals><animal name="mouse"><type/></animal></animals></test>'
@@ -381,8 +402,9 @@ def test_get_subtree_select_attr_named_element():
     </test>
 </nc:data>
     """)
-    assert diffXML(xml, expected) == None
+    assert diffXML(xml, expected) is None
     m.close_session()
+
 
 def test_get_subtree_missing():
     select = '<test><animals><animal><name>elephant</name></animal></animals></test>'
@@ -398,6 +420,7 @@ def test_get_subtree_missing():
 
 # GET XPATH
 
+
 def test_get_xpath_node():
     m = connect()
     xml = m.get(filter=('xpath', '/test/settings/debug')).data
@@ -412,8 +435,9 @@ def test_get_xpath_node():
     </test>
 </nc:data>
     """)
-    assert diffXML(expected, xml) == None
+    assert diffXML(expected, xml) is None
     m.close_session()
+
 
 def test_get_xpath_trunk():
     m = connect()
@@ -430,8 +454,9 @@ def test_get_xpath_trunk():
     </test>
 </nc:data>
     """)
-    assert diffXML(expected, xml) == None
+    assert diffXML(expected, xml) is None
     m.close_session()
+
 
 def test_get_xpath_list_trunk():
     m = connect()
@@ -458,8 +483,9 @@ def test_get_xpath_list_trunk():
     </test>
 </nc:data>
     """)
-    assert diffXML(expected, xml) == None
+    assert diffXML(expected, xml) is None
     m.close_session()
+
 
 def test_get_xpath_list_select_one_trunk():
     xpath = "/test/animals/animal[name='cat']"
@@ -478,8 +504,9 @@ def test_get_xpath_list_select_one_trunk():
     </test>
 </nc:data>
     """)
-    assert diffXML(expected, xml) == None
+    assert diffXML(expected, xml) is None
     m.close_session()
+
 
 def test_get_xpath_list_select_one_parameter():
     xpath = "/test/animals/animal[name='cat']/type"
@@ -498,8 +525,9 @@ def test_get_xpath_list_select_one_parameter():
     </test>
 </nc:data>
     """)
-    assert diffXML(expected, xml) == None
+    assert diffXML(expected, xml) is None
     m.close_session()
+
 
 @pytest.mark.skip(reason="does not work yet")
 def test_xpath_query_multi():
@@ -521,10 +549,11 @@ def test_xpath_query_multi():
     </test>
 </nc:data>
     """)
-    assert diffXML(expected, xml) == None
+    assert diffXML(expected, xml) is None
     m.close_session()
 
 # GET-CONFIG
+
 
 def test_get_config_simple_node():
     m = connect()
@@ -532,6 +561,7 @@ def test_get_config_simple_node():
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
     m.close_session()
+
 
 def test_get_config_unsupported_datastore():
     m = connect()
@@ -541,8 +571,9 @@ def test_get_config_unsupported_datastore():
     except RPCError as err:
         print(err)
         assert err.tag == 'operation-not-supported'
-    assert response == None, 'Should have received an RPCError'
+    assert response is None, 'Should have received an RPCError'
     m.close_session()
+
 
 @pytest.mark.skip(reason="does not work yet")
 def test_get_config_no_state():
@@ -556,8 +587,8 @@ def test_get_config_no_state():
     # Ignore the rest!
     m.close_session()
 
-
 # EDIT-CONFIG
+
 
 def test_edit_config_node():
     m = connect()
@@ -572,8 +603,10 @@ def test_edit_config_node():
 """
     response = m.edit_config(target='running', config=payload)
     print(response)
-    assert m.get(filter=('xpath', '/test/settings/priority')).data.find('./{*}test/{*}settings/{*}priority').text == '99'
+    check_edit = m.get(filter=('xpath', '/test/settings/priority'))
+    assert check_edit.data.find('./{*}test/{*}settings/{*}priority').text == '99'
     m.close_session()
+
 
 def test_edit_config_multi():
     m = connect()
@@ -589,9 +622,12 @@ def test_edit_config_multi():
 """
     response = m.edit_config(target='running', config=payload)
     print(response)
-    assert m.get(filter=('xpath', '/test/settings/enable')).data.find('./{*}test/{*}settings/{*}enable').text == 'false'
-    assert m.get(filter=('xpath', '/test/settings/priority')).data.find('./{*}test/{*}settings/{*}priority').text == '99'
+    check_edit = m.get(filter=('xpath', '/test/settings/enable'))
+    assert check_edit.data.find('./{*}test/{*}settings/{*}enable').text == 'false'
+    check_edit = m.get(filter=('xpath', '/test/settings/priority'))
+    assert check_edit.data.find('./{*}test/{*}settings/{*}priority').text == '99'
     m.close_session()
+
 
 def test_edit_config_list():
     m = connect()
@@ -616,6 +652,7 @@ def test_edit_config_list():
 
 # EDIT-CONFIG (operation="delete")
 
+
 def test_edit_config_delete_invalid_path():
     m = connect()
     payload = """
@@ -628,11 +665,12 @@ def test_edit_config_delete_invalid_path():
 </config>
 """
     try:
-        response = m.edit_config(target='running', config=payload)
+        m.edit_config(target='running', config=payload)
     except RPCError as err:
         print(err)
         assert err.tag == 'malformed-message'
     m.close_session()
+
 
 def test_edit_config_delete_node():
     m = connect()
@@ -647,8 +685,9 @@ def test_edit_config_delete_node():
 """
     response = m.edit_config(target='running', config=payload)
     print(response)
-    assert m.get(filter=('xpath', '/test/settings/priority')).data.find('./{*}test/{*}settings/{*}priority') == None
+    assert m.get(filter=('xpath', '/test/settings/priority')).data.find('./{*}test/{*}settings/{*}priority') is None
     m.close_session()
+
 
 @pytest.mark.skip(reason="does not work - we return success even if there is no data")
 def test_edit_config_delete_no_data():
@@ -671,6 +710,7 @@ def test_edit_config_delete_no_data():
         assert err.tag == 'data-missing'
     m.close_session()
 
+
 def test_edit_config_delete_multi():
     m = connect()
     payload = """
@@ -690,6 +730,7 @@ def test_edit_config_delete_multi():
     assert etree.XPath("//text()")(xml) == ['enable']
     m.close_session()
 
+
 @pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_trunk():
     m = connect()
@@ -706,6 +747,7 @@ def test_edit_config_delete_trunk():
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert etree.XPath("//text()")(xml) == []
     m.close_session()
+
 
 @pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_list():
@@ -729,6 +771,7 @@ def test_edit_config_delete_list():
     assert 'cat' in etree.XPath("//text()")(xml)
     m.close_session()
 
+
 def test_edit_config_merge_delete():
     m = connect()
     payload = """
@@ -749,31 +792,30 @@ def test_edit_config_merge_delete():
     m.close_session()
 
 # TODO EDIT-CONFIG (operation:default=merge)
-        #  replace:  The configuration data identified by the element
-        #     containing this attribute replaces any related configuration
-        #     in the configuration datastore identified by the <target>
-        #     parameter.  If no such configuration data exists in the
-        #     configuration datastore, it is created.  Unlike a
-        #     <copy-config> operation, which replaces the entire target
-        #     configuration, only the configuration actually present in
-        #     the <config> parameter is affected.
+    #  replace:  The configuration data identified by the element
+    #     containing this attribute replaces any related configuration
+    #     in the configuration datastore identified by the <target>
+    #     parameter.  If no such configuration data exists in the
+    #     configuration datastore, it is created.  Unlike a
+    #     <copy-config> operation, which replaces the entire target
+    #     configuration, only the configuration actually present in
+    #     the <config> parameter is affected.
 
-        #  create:  The configuration data identified by the element
-        #     containing this attribute is added to the configuration if
-        #     and only if the configuration data does not already exist in
-        #     the configuration datastore.  If the configuration data
-        #     exists, an <rpc-error> element is returned with an
-        #     <error-tag> value of "data-exists".
+    #  create:  The configuration data identified by the element
+    #     containing this attribute is added to the configuration if
+    #     and only if the configuration data does not already exist in
+    #     the configuration datastore.  If the configuration data
+    #     exists, an <rpc-error> element is returned with an
+    #     <error-tag> value of "data-exists".
 
-        #  remove:  The configuration data identified by the element
-        #     containing this attribute is deleted from the configuration
-        #     if the configuration data currently exists in the
-        #     configuration datastore.  If the configuration data does not
-        #     exist, the "remove" operation is silently ignored by the
-        #     server.
+    #  remove:  The configuration data identified by the element
+    #     containing this attribute is deleted from the configuration
+    #     if the configuration data currently exists in the
+    #     configuration datastore.  If the configuration data does not
+    #     exist, the "remove" operation is silently ignored by the
+    #     server.
 
 # TODO VALIDATE
 # TODO COPY-CONFIG
 # TODO DELETE-CONFIG
 # TODO LOCK/UNLOCK
-
