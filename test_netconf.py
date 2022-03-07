@@ -103,6 +103,22 @@ def test_server_capabilities():
 # GET SUBTREE
 
 
+def _get_test_with_filter(f_value, expected=None, f_type='subtree'):
+    """
+    Perform a get with the given filter, which can be of type 'subtree' or 'xpath'. If expectede
+    respose is given, assert that it was the same as the response from the get. Return the response
+    so the caller can perform its own tests.
+    """
+    m = connect()
+    xml = m.get(filter=(f_type, f_value)).data
+    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    if expected:
+        expected = toXML(expected)
+        assert diffXML(xml, expected) is None
+    m.close_session()
+    return xml
+
+
 def test_get_subtree_no_filter():
     m = connect()
     xml = m.get().data
@@ -129,10 +145,7 @@ def test_get_subtree_empty_filter():
 
 def test_get_subtree_node():
     select = '<test><settings><debug/></settings></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <settings>
@@ -140,17 +153,13 @@ def test_get_subtree_node():
         </settings>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_trunk():
     select = '<test><settings/></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <settings>
@@ -160,17 +169,13 @@ def test_get_subtree_trunk():
         </settings>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_multi_parameters():
     select = '<test><settings><debug/><priority/></settings></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <settings>
@@ -179,17 +184,13 @@ def test_get_subtree_multi_parameters():
         </settings>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_list_container():
     select = '<test><animals/></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -209,17 +210,13 @@ def test_get_subtree_list_container():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_list_element():
     select = '<test><animals><animal/></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -239,17 +236,13 @@ def test_get_subtree_list_element():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_list_parameter():
     select = '<test><animals><animal><name/></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -265,17 +258,13 @@ def test_get_subtree_list_parameter():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_selection_multi():
     select = '<test><animals><animal><name/><type/></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -293,17 +282,13 @@ def test_get_subtree_selection_multi():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_select_one_node():
     select = '<test><animals><animal><name>cat</name></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -314,16 +299,13 @@ def test_get_subtree_select_one_node():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_select_one_elements():
     select = '<test><animals><animal><name>cat</name><type/></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -334,17 +316,13 @@ def test_get_subtree_select_one_elements():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_select_multi():
     select = '<test><animals><animal><name>cat</name></animal><animal><name>dog</name></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(xml)
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -359,17 +337,13 @@ def test_get_subtree_select_multi():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_select_attr_named_only():
     select = '<test><animals><animal name="cat"/></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(xml)
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -380,17 +354,13 @@ def test_get_subtree_select_attr_named_only():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_select_attr_named_element():
     select = '<test><animals><animal name="mouse"><type/></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
-    print(xml)
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -401,19 +371,109 @@ def test_get_subtree_select_attr_named_element():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(xml, expected) is None
-    m.close_session()
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_select_no_key_other_field():
+    """
+    Don't specify key node in filter. RFC states that we MAY include key in output,
+    we are not currentl doing this.
+    """
+    select = '<test><animals><animal><type/></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <animals>
+            <animal>
+                <type>big</type>
+            </animal>
+            <animal>
+                <type>little</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_select_no_key_other_field_value():
+    """
+    RFC states 'Filtering of list content is not supported.' This means that this query will return
+    all types.
+    """
+    select = '<test><animals><animal><type>little</type></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <animals>
+            <animal>
+                <type>big</type>
+            </animal>
+            <animal>
+                <type>little</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_select_key_other_field_value():
+    """
+    This test may not be showing correct behaviour.
+    """
+    select = '<test><animals><animal><name/><type>little</type></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <animals>
+            <animal>
+                <name>cat</name>
+                <type>big</type>
+            </animal>
+            <animal>
+                <name>dog</name>
+            </animal>
+            <animal>
+                <name>mouse</name>
+                <type>little</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_select_key_value_other_field_value():
+    """
+    This test may not be showing correct behaviour.
+    """
+    select = '<test><animals><animal><name>mouse</name><type>little</type></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <animals>
+            <animal>
+                <name>mouse</name>
+                <type>little</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
 
 
 def test_get_subtree_missing():
     select = '<test><animals><animal><name>elephant</name></animal></animals></test>'
-    m = connect()
-    xml = m.get(filter=('subtree', select)).data
+    xml = _get_test_with_filter(select)
     assert xml.tag == '{urn:ietf:params:xml:ns:netconf:base:1.0}data'
     assert len(xml.getchildren()) == 0
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    m.close_session()
 
 # TODO :with-defaults
 # TODO explicit namespace queries
@@ -422,11 +482,8 @@ def test_get_subtree_missing():
 
 
 def test_get_xpath_node():
-    m = connect()
-    xml = m.get(filter=('xpath', '/test/settings/debug')).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
-    expected = toXML("""
+    xpath = '/test/settings/debug'
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <settings>
@@ -434,16 +491,14 @@ def test_get_xpath_node():
         </settings>
     </test>
 </nc:data>
-    """)
-    assert diffXML(expected, xml) is None
-    m.close_session()
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
 
 
 def test_get_xpath_trunk():
-    m = connect()
-    xml = m.get(filter=('xpath', '/test/settings')).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    xpath = '/test/settings'
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <settings>
@@ -453,16 +508,13 @@ def test_get_xpath_trunk():
         </settings>
     </test>
 </nc:data>
-    """)
-    assert diffXML(expected, xml) is None
-    m.close_session()
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
 
 
 def test_get_xpath_list_trunk():
-    m = connect()
-    xml = m.get(filter=('xpath', '/test/animals')).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    xpath = '/test/animals'
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -482,17 +534,13 @@ def test_get_xpath_list_trunk():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(expected, xml) is None
-    m.close_session()
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
 
 
 def test_get_xpath_list_select_one_trunk():
     xpath = "/test/animals/animal[name='cat']"
-    m = connect()
-    xml = m.get(filter=('xpath', xpath)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -503,17 +551,13 @@ def test_get_xpath_list_select_one_trunk():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(expected, xml) is None
-    m.close_session()
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
 
 
 def test_get_xpath_list_select_one_parameter():
     xpath = "/test/animals/animal[name='cat']/type"
-    m = connect()
-    xml = m.get(filter=('xpath', xpath)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -524,18 +568,14 @@ def test_get_xpath_list_select_one_parameter():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(expected, xml) is None
-    m.close_session()
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
 
 
 @pytest.mark.skip(reason="does not work yet")
 def test_xpath_query_multi():
     xpath = ("/test/animals/animal[name='cat']/name | /test/animals/animal[name='dog']/name")
-    m = connect()
-    xml = m.get(filter=('xpath', xpath)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    expected = toXML("""
+    expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
         <animals>
@@ -548,9 +588,8 @@ def test_xpath_query_multi():
         </animals>
     </test>
 </nc:data>
-    """)
-    assert diffXML(expected, xml) is None
-    m.close_session()
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
 
 # GET-CONFIG
 
