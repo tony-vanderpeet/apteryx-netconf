@@ -20,6 +20,7 @@ db_default = [
     ('/test/settings/debug', 'enable'),
     ('/test/settings/enable', 'true'),
     ('/test/settings/priority', '1'),
+    ('/test/settings/lastmod', '1567898765'),
     ('/test/state/counter', '42'),
     ('/test/animals/animal/cat/name', 'cat'),
     ('/test/animals/animal/cat/type', 'big'),
@@ -166,6 +167,7 @@ def test_get_subtree_trunk():
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
+            <lastmod>1567898765</lastmod>
         </settings>
     </test>
 </nc:data>
@@ -505,6 +507,7 @@ def test_get_xpath_trunk():
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
+            <lastmod>1567898765</lastmod>
         </settings>
     </test>
 </nc:data>
@@ -614,14 +617,14 @@ def test_get_config_unsupported_datastore():
     m.close_session()
 
 
-@pytest.mark.skip(reason="does not work yet")
 def test_get_config_no_state():
     m = connect()
     xml = m.get_config(source='running').data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     # Full tree should be returned with config only
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
-    assert xml.find('./{*}test/{*}state/{*}counter').text != '42'
+    assert xml.find('./{*}test/{*}settings/{*}lastmod') is None
+    assert xml.find('./{*}test/{*}state/{*}counter') is None
     assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     # Ignore the rest!
     m.close_session()
@@ -766,7 +769,7 @@ def test_edit_config_delete_multi():
     print(response)
     xml = m.get(filter=('xpath', '/test/settings')).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable']
+    assert etree.XPath("//text()")(xml) == ['enable', '1567898765']
     m.close_session()
 
 
@@ -827,8 +830,9 @@ def test_edit_config_merge_delete():
     print(response)
     xml = m.get(filter=('xpath', '/test/settings')).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', 'false']
+    assert etree.XPath("//text()")(xml) == ['enable', 'false', '1567898765']
     m.close_session()
+
 
 # TODO EDIT-CONFIG (operation:default=merge)
     #  replace:  The configuration data identified by the element
