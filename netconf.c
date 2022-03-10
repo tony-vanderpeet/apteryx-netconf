@@ -310,7 +310,7 @@ get_full_tree ()
 }
 
 static bool
-handle_get (struct netconf_session *session, xmlNode * rpc)
+handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only)
 {
     xmlNode *action = xmlFirstElementChild (rpc);
     xmlNode *node;
@@ -322,6 +322,11 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
+
+    if (config_only)
+    {
+        schflags |= SCH_F_CONFIG;
+    }
 
     /* Parse options */
     for (node = xmlFirstElementChild (action); node; node = xmlNextElementSibling (node))
@@ -376,7 +381,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc)
             }
             free (attr);
         }
-        //TODO - Parse with-defaults 
+        //TODO - Parse with-defaults
     }
 
     /* Query database */
@@ -621,11 +626,15 @@ netconf_handle_session (int fd)
             g_free (message);
             break;
         }
-        else if (g_strcmp0 ((char *) child->name, "get") == 0 ||
-                 g_strcmp0 ((char *) child->name, "get-config") == 0)
+        else if (g_strcmp0 ((char *) child->name, "get") == 0)
         {
             VERBOSE ("Handle RPC %s\n", (char *) child->name);
-            handle_get (session, rpc);
+            handle_get (session, rpc, false);
+        }
+        else if (g_strcmp0 ((char *) child->name, "get-config") == 0)
+        {
+            VERBOSE ("Handle RPC %s\n", (char *) child->name);
+            handle_get (session, rpc, true);
         }
         else if (g_strcmp0 ((char *) child->name, "edit-config") == 0)
         {

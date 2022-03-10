@@ -11,6 +11,7 @@
         <VALUE name="false" value="false"/>
       </NODE>
       <NODE name="priority" mode="rw" help="integer"/>
+      <NODE name="lastmod" mode="r" help="timestamp"/>
     </NODE>
     <NODE name="state" help="State">
       <NODE name="counter" mode="r" default="0" help="uint32"/>
