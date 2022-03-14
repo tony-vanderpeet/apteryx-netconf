@@ -86,9 +86,9 @@ def test_server_capabilities():
     for capability in m.server_capabilities:
         print("Capability: %s" % capability.split('?')[0])
     assert ":base" in m.server_capabilities
-    # assert ":writable-running" in m.server_capabilities
+    assert ":writable-running" in m.server_capabilities
     # assert ":startup" in m.server_capabilities
-    # assert ":xpath" in m.server_capabilities
+    assert ":xpath" in m.server_capabilities
     assert ":with-defaults" in m.server_capabilities
 
     assert ":candidate" not in m.server_capabilities

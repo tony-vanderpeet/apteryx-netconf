@@ -255,8 +255,10 @@ handle_hello (struct netconf_session *session)
     node = xmlNewChild (root, NULL, BAD_CAST "nc:capabilities", NULL);
     child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
     xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:base:1.1");
-    // child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-    // xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
+    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
+    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
     child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
     xmlNodeSetContent (child,
                        BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
