@@ -714,7 +714,7 @@ def test_edit_config_delete_invalid_path():
   </test>
 </config>
 """
-    _edit_config_test(payload, expect_err='malformed-message')
+    _edit_config_test(payload, expect_err='bad-element')
 
 
 def test_edit_config_delete_node():
@@ -731,7 +731,6 @@ def test_edit_config_delete_node():
     assert xml.find('./{*}test/{*}settings/{*}priority') is None
 
 
-@pytest.mark.skip(reason="does not work - we return success even if there is no data")
 def test_edit_config_delete_no_data():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -742,7 +741,9 @@ def test_edit_config_delete_no_data():
   </test>
 </config>
 """
-    _edit_config_test(payload, expect_err='data-missing')
+    xml = _edit_config_test(payload, post_xpath='/test/settings')
+    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    assert 'priority' not in etree.XPath("//text()")(xml)
 
 
 def test_edit_config_delete_multi():
@@ -758,10 +759,11 @@ def test_edit_config_delete_multi():
 """
     xml = _edit_config_test(payload, post_xpath='/test/settings')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', '1567898765']
+    print(etree.XPath("//text()")(xml))
+    assert 'enable' not in etree.XPath("//text()")(xml)
+    assert 'priority' not in etree.XPath("//text()")(xml)
 
 
-@pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_trunk():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -775,7 +777,21 @@ def test_edit_config_delete_trunk():
     assert etree.XPath("//text()")(xml) == []
 
 
-@pytest.mark.skip(reason="does not work yet")
+def test_edit_config_delete_missing():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal xc:operation="delete">
+        <name>unicorn</name>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, expect_err='data-missing')
+
+
 def test_edit_config_delete_list():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -791,7 +807,7 @@ def test_edit_config_delete_list():
 """
     xml = _edit_config_test(payload, post_xpath='/test/animals')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert 'cat' in etree.XPath("//text()")(xml)
+    assert 'cat' not in etree.XPath("//text()")(xml)
 
 
 def test_edit_config_merge_delete():
@@ -820,7 +836,6 @@ def test_edit_config_merge_delete():
     #     configuration, only the configuration actually present in
     #     the <config> parameter is affected.
 
-@pytest.mark.skip(reason="does not work")
 def test_edit_config_replace_all():
     """
     Replace all animals with one (existing) animal.
@@ -926,7 +941,6 @@ def test_edit_config_create_new():
     assert xml.find('./{*}test/{*}animals/{*}animal[name="dolphin"]/{*}colour') is None
 
 
-@pytest.mark.skip(reason="does not work")
 def test_edit_config_create_exists():
     """
     Create one animal. It already exists.

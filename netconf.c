@@ -29,8 +29,27 @@ struct netconf_session
     int fd;
 };
 
+typedef struct _edit_config_parameters
+{
+    sch_instance * in_instance;
+    xmlNode * in_xml;
+    int in_def_op;
+    int in_flags;
+    GNode * out_set_tree;
+    GList * out_delete_paths;
+    char * error_tag;
+} edit_config_parameters;
+
 #define NETCONF_BASE_1_0_END "]]>]]>"
 #define NETCONF_BASE_1_1_END "\n##\n"
+
+/* edit-config operations */
+#define NC_OP_NONE      0
+#define NC_OP_MERGE     1
+#define NC_OP_REPLACE   2
+#define NC_OP_CREATE    3
+#define NC_OP_DELETE    4
+#define NC_OP_REMOVE    5
 
 static bool
 send_rpc_ok (struct netconf_session *session, xmlNode * rpc)
@@ -417,12 +436,302 @@ xmlFindNodeByName (xmlNode * root, const xmlChar * name)
 }
 
 static bool
+xml_node_has_content (xmlNode * xml)
+{
+    xmlChar *content = xmlNodeGetContent (xml);
+    bool ret = (content && xmlStrlen (content) > 0);
+    xmlFree (content);
+    return ret;
+}
+
+
+/**
+ * Check XML node for the operation attribute and extract it. Return whether the
+ * operation is recognised or not.
+ */
+static bool
+_operation_ok (xmlNode *xml, int curr_op, int *new_op, edit_config_parameters *parms)
+{
+    char *attr;
+
+    attr = (char *) xmlGetProp (xml, BAD_CAST "operation");
+    if (attr != NULL)
+    {
+        if (g_strcmp0 (attr, "delete") == 0)
+        {
+            *new_op = NC_OP_DELETE;
+        }
+        else if (g_strcmp0 (attr, "merge") == 0)
+        {
+            *new_op = NC_OP_MERGE;
+        }
+        else if (g_strcmp0 (attr, "replace") == 0)
+        {
+            *new_op = NC_OP_REPLACE;
+        }
+        else if (g_strcmp0 (attr, "create") == 0)
+        {
+            *new_op = NC_OP_CREATE;
+        }
+        else if (g_strcmp0 (attr, "remove") == 0)
+        {
+            *new_op = NC_OP_REMOVE;
+        }
+        else
+        {
+            if (parms != NULL)
+            {
+                parms->error_tag = "bad-attribute";
+            }
+            return false;
+        }
+
+        /* Check for invvalid transitions between sub-operations. We only allow
+         * merge->anything transitions.
+         */
+        if (curr_op != *new_op && curr_op != NC_OP_MERGE)
+        {
+            parms->error_tag = "operation-not-supported";
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Check for existence of data at a particular xpath or below. This is
+ * required for NC_OP_CREATE and NC_OP_DELETE. Fill in the error_tag if we don't
+ * get expected result, and return existence result.
+ *
+ */
+static bool
+_does_exist (const char *check_xpath, edit_config_parameters *parms, bool expected)
+{
+    GNode *check_result;
+
+    check_result = apteryx_get_tree (check_xpath);
+
+    /* Check existence against expected result - no point if parms not defined */
+    if (parms)
+    {
+        if (check_result && !expected)
+        {
+            parms->error_tag = "data-exists";
+        }
+        else if (!check_result && expected)
+        {
+            parms->error_tag = "data-missing";
+        }
+    }
+
+    /* Return actual existence of data */
+    if (check_result)
+    {
+        apteryx_free_tree (check_result);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Process a node in a config structure.
+ * parms - contains a number of input and output parameters
+ * schema - parent of this node in the XML data model schema
+ * xml - where this node is in the config structure
+ * part_xpath - xpath of the current node in the schema
+ * curr_op - operation inherited from previous parsing
+ * depth - how deep we are into the recursive call tree
+ */
+GNode *
+_config_to_tree_and_delete_paths (edit_config_parameters * parms, sch_node * schema, xmlNode * xml, const char * part_xpath, int curr_op, int depth)
+{
+    const char *name = (const char *) xml->name;
+    xmlNode *child;
+    char *attr;
+    GNode *tree = NULL;
+    GNode *node = NULL;
+    char *key = NULL;
+    char *new_xpath = NULL;
+    int new_op = curr_op;
+    bool add_to_delete_list = false;
+
+    /* Find schema node */
+    if (!schema)
+    {
+        schema = sch_lookup (parms->in_instance, name);
+    }
+    else
+    {
+        schema = sch_node_child (schema, name);
+    }
+    if (schema == NULL)
+    {
+        parms->error_tag = "bad-element";
+        return NULL;
+    }
+
+    /* Update xpath. */
+    new_xpath = g_strdup_printf ("%s/%s", part_xpath, name);
+
+    /* Check operation */
+    if (!_operation_ok (xml, curr_op, &new_op, parms))
+    {
+        free (new_xpath);
+        return NULL;
+    }
+
+    /* LIST */
+    if (sch_is_list (schema))
+    {
+        char *old_xpath = new_xpath;
+        char *key_value;
+
+        key = sch_name (sch_node_child_first (sch_node_child_first (schema)));
+        depth++;
+        tree = node = APTERYX_NODE (NULL, g_strdup (name));
+        attr = (char *) xmlGetProp (xml, BAD_CAST key);
+        if (attr)
+        {
+            node = APTERYX_NODE (node, attr);
+            if (!(parms->in_flags & SCH_F_STRIP_KEY) || xmlFirstElementChild (xml))
+            {
+                APTERYX_NODE (node, g_strdup (key));
+            }
+            key_value = attr;
+        }
+        else if (xmlFirstElementChild (xml) &&
+                 g_strcmp0 ((const char *) xmlFirstElementChild (xml)->name, key) == 0 &&
+                 xml_node_has_content (xmlFirstElementChild (xml)))
+        {
+            node =
+                APTERYX_NODE (node,
+                              (char *) xmlNodeGetContent (xmlFirstElementChild (xml)));
+            key_value = (char *) xmlNodeGetContent (xmlFirstElementChild (xml));
+        }
+        else
+        {
+            node = APTERYX_NODE (node, g_strdup ("*"));
+            key_value = "*";
+        }
+        schema = sch_node_child_first (schema);
+        new_xpath = g_strdup_printf ("%s/%s", old_xpath, key_value);
+        free (old_xpath);
+    }
+    /* CONTAINER */
+    else if (!sch_is_leaf (schema))
+    {
+        tree = node = APTERYX_NODE (NULL, g_strdup_printf ("%s%s", depth ? "" : "/", name));
+    }
+    /* LEAF */
+    else
+    {
+        if (new_op != NC_OP_DELETE && new_op != NC_OP_REMOVE)
+        {
+            tree = node = APTERYX_NODE (NULL, g_strdup (name));
+            if (xml_node_has_content (xml))
+            {
+                node = APTERYX_NODE (tree, (char *) xmlNodeGetContent (xml));
+            }
+        }
+    }
+
+    /* Delete actions. */
+    if (curr_op != NC_OP_DELETE && curr_op != NC_OP_REMOVE &&
+        (new_op == NC_OP_DELETE || new_op == NC_OP_REMOVE))
+    {
+        add_to_delete_list = true;
+        if (new_op == NC_OP_DELETE)
+        {
+            if (!_does_exist (new_xpath, parms, true))
+            {
+                free (new_xpath);
+                return NULL;
+            }
+        }
+    }
+    else if (curr_op != NC_OP_REPLACE && new_op == NC_OP_REPLACE)
+    {
+        add_to_delete_list = true;
+    }
+    if (add_to_delete_list)
+    {
+        parms->out_delete_paths = g_list_append (parms->out_delete_paths, g_strdup (new_xpath));
+    }
+
+    /* Create actions */
+    if (curr_op != NC_OP_CREATE && new_op == NC_OP_CREATE)
+    {
+        if (_does_exist (new_xpath, parms, false))
+        {
+            free (new_xpath);
+            return NULL;
+        }
+    }
+
+    for (child = xmlFirstElementChild (xml); child; child = xmlNextElementSibling (child))
+    {
+        if ((parms->in_flags & SCH_F_STRIP_KEY) && key &&
+            g_strcmp0 ((const char *) child->name, key) == 0)
+        {
+            /* The only child is the key with value */
+            if (xmlChildElementCount (xml) == 1)
+            {
+                if (xml_node_has_content (child))
+                {
+                    /* Want all parameters for one entry in list. */
+                    APTERYX_NODE (node, g_strdup ("*"));
+                }
+                else
+                {
+                    /* Want one field in list element for one or more entries */
+                    APTERYX_NODE (node, g_strdup ((const char *) child->name));
+                }
+                break;
+            }
+            /* Multiple children - make sure key appears */
+            else if (xmlChildElementCount (xml) > 1)
+            {
+                APTERYX_NODE (node, g_strdup ((const char *) child->name));
+            }
+        }
+        else
+        {
+            GNode *cn = _config_to_tree_and_delete_paths (parms, schema, child, new_xpath, new_op, depth + 1);
+            if (cn)
+            {
+                g_node_append (node, cn);
+            }
+        }
+    }
+
+    /* Get everything from here down if a trunk of a subtree */
+    if (!xmlFirstElementChild (xml) && sch_node_child_first (schema) &&
+        g_strcmp0 (APTERYX_NAME (node), "*") != 0)
+    {
+        APTERYX_NODE (node, g_strdup ("*"));
+    }
+
+    free (key);
+    free (new_xpath);
+    return tree;
+}
+
+void
+config_to_tree_and_delete_paths (edit_config_parameters * parms)
+{
+    /* Initialise information used to descrned the config data */
+    parms->out_set_tree = _config_to_tree_and_delete_paths (parms, NULL, xmlFirstElementChild (parms->in_xml), "", parms->in_def_op, 0);
+}
+
+static bool
 handle_edit (struct netconf_session *session, xmlNode * rpc)
 {
     xmlNode *action = xmlFirstElementChild (rpc);
     xmlNode *node;
     GNode *tree = NULL;
     int schflags = 0;
+    edit_config_parameters parms;
+    GList *iter;
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
@@ -449,19 +758,39 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         return send_rpc_error (session, rpc, "missing-element");
     }
 
-    /* Convert to gnode */
-    tree = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags);
-    if (!tree)
-    {
-        VERBOSE ("SETTREE: malformed tree\n");
-        return send_rpc_error (session, rpc, "malformed-message");
-    }
+    /* Set up parameters for message parsing. */
+    parms.in_def_op = NC_OP_MERGE;
+    parms.in_instance = g_schema;
+    parms.in_flags = schflags;
+    parms.in_xml = node;
+    parms.out_set_tree = NULL;
+    parms.out_delete_paths = NULL;
+    parms.error_tag = NULL;
+
+    config_to_tree_and_delete_paths (&parms);
+
+    tree = parms.out_set_tree;
 
     //TODO - permissions
     //TODO - patterns
 
     /* Edit database */
     DEBUG ("NETCONF: SET %s\n", tree ? APTERYX_NAME (tree) : "NULL");
+    if (parms.error_tag)
+    {
+        apteryx_free_tree (tree);
+        return send_rpc_error (session, rpc, parms.error_tag);
+    }
+
+    /* Anything on the delete list should be purged. */
+    for (iter = parms.out_delete_paths; iter; iter = g_list_next (iter))
+    {
+        char *prune_string = (char *) iter->data;
+        iter->data = NULL;
+        apteryx_prune (prune_string);
+        free (prune_string);
+    }
+
     if (tree && !apteryx_set_tree (tree))
     {
         apteryx_free_tree (tree);
