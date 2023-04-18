@@ -323,7 +323,18 @@ def test_get_subtree_select_one_elements():
 
 
 def test_get_subtree_select_multi():
-    select = '<test><animals><animal><name>cat</name></animal><animal><name>dog</name></animal></animals></test>'
+    select = """
+<test>
+  <animals>
+    <animal>
+      <name>cat</name>
+    </animal>
+    <animal>
+      <name>dog</name>
+    </animal>
+  </animals>
+</test>
+    """
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
@@ -454,7 +465,16 @@ def test_get_subtree_select_key_value_other_field_value():
     """
     This test may not be showing correct behaviour.
     """
-    select = '<test><animals><animal><name>mouse</name><type>little</type></animal></animals></test>'
+    select = """
+<test>
+  <animals>
+    <animal>
+      <name>mouse</name>
+      <type>little</type>
+    </animal>
+  </animals>
+</test>
+    """
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test>
@@ -666,7 +686,8 @@ def _edit_config_test_error(payload, error_tag):
 def test_edit_config_node():
     m = connect()
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <priority>99</priority>
@@ -684,7 +705,8 @@ def test_edit_config_node():
 def test_edit_config_multi():
     m = connect()
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <enable>false</enable>
@@ -704,7 +726,8 @@ def test_edit_config_multi():
 
 def test_edit_config_list():
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <animals>
         <animal>
@@ -722,7 +745,8 @@ def test_edit_config_list():
 
 def test_edit_config_delete_invalid_path():
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <missing operation="delete">1</missing>
@@ -736,7 +760,8 @@ def test_edit_config_delete_invalid_path():
 def test_edit_config_delete_node():
     m = connect()
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <priority xc:operation="delete">1</priority>
@@ -746,14 +771,16 @@ def test_edit_config_delete_node():
 """
     response = m.edit_config(target='running', config=payload)
     print(response)
-    assert m.get(filter=('xpath', '/test/settings/priority')).data.find('./{*}test/{*}settings/{*}priority') is None
+    filt = ('xpath', '/test/settings/priority')
+    assert m.get(filter=filt).data.find('./{*}test/{*}settings/{*}priority') is None
     m.close_session()
 
 
 @pytest.mark.skip(reason="does not work - we return success even if there is no data")
 def test_edit_config_delete_no_data():
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <priority xc:operation="delete">1</priority>
@@ -767,7 +794,8 @@ def test_edit_config_delete_no_data():
 def test_edit_config_delete_multi():
     m = connect()
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <enable xc:operation="delete">true</enable>
@@ -788,7 +816,8 @@ def test_edit_config_delete_multi():
 def test_edit_config_delete_trunk():
     m = connect()
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings xc:operation="delete" />
   </test>
@@ -805,7 +834,8 @@ def test_edit_config_delete_trunk():
 @pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_list():
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <animals>
         <animal xc:operation="delete">
@@ -822,7 +852,8 @@ def test_edit_config_delete_list():
 def test_edit_config_merge_delete():
     m = connect()
     payload = """
-<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
         <enable>false</enable>
@@ -839,29 +870,132 @@ def test_edit_config_merge_delete():
     m.close_session()
 
 
-# TODO EDIT-CONFIG (operation:default=merge)
-    #  replace:  The configuration data identified by the element
-    #     containing this attribute replaces any related configuration
-    #     in the configuration datastore identified by the <target>
-    #     parameter.  If no such configuration data exists in the
-    #     configuration datastore, it is created.  Unlike a
-    #     <copy-config> operation, which replaces the entire target
-    #     configuration, only the configuration actually present in
-    #     the <config> parameter is affected.
+# EDIT-CONFIG (operation=replace)
+#  replace:  The configuration data identified by the element
+#     containing this attribute replaces any related configuration
+#     in the configuration datastore identified by the <target>
+#     parameter.  If no such configuration data exists in the
+#     configuration datastore, it is created.  Unlike a
+#     <copy-config> operation, which replaces the entire target
+#     configuration, only the configuration actually present in
+#     the <config> parameter is affected.
 
-    #  create:  The configuration data identified by the element
-    #     containing this attribute is added to the configuration if
-    #     and only if the configuration data does not already exist in
-    #     the configuration datastore.  If the configuration data
-    #     exists, an <rpc-error> element is returned with an
-    #     <error-tag> value of "data-exists".
+# EDIT-CONFIG (operation=create)
+#  create:  The configuration data identified by the element
+#     containing this attribute is added to the configuration if
+#     and only if the configuration data does not already exist in
+#     the configuration datastore.  If the configuration data
+#     exists, an <rpc-error> element is returned with an
+#     <error-tag> value of "data-exists".
 
-    #  remove:  The configuration data identified by the element
-    #     containing this attribute is deleted from the configuration
-    #     if the configuration data currently exists in the
-    #     configuration datastore.  If the configuration data does not
-    #     exist, the "remove" operation is silently ignored by the
-    #     server.
+def test_edit_config_create_list_item():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal xc:operation="create">
+            <name>penguin</name>
+            <type>big</type>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test_no_error(payload, "/test/animals", "penguin")
+
+
+@pytest.mark.skip(reason="does not work yet")
+def test_edit_config_create_list_item_exists():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal xc:operation="create">
+            <name>cat</name>
+            <type>little</type>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test_error(payload, "data-exists")
+
+
+def test_edit_config_create_list_item_field():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>cat</name>
+            <colour xc:operation="create">white</colour>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test_no_error(payload, "/test/animals", "white")
+
+
+@pytest.mark.skip(reason="does not work yet")
+def test_edit_config_create_list_item_field_exists():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>cat</name>
+            <type xc:operation="create">little</type>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test_error(payload, "data-exists")
+
+
+# EDIT-CONFIG (operation=remove)
+#  remove:  The configuration data identified by the element
+#     containing this attribute is deleted from the configuration
+#     if the configuration data currently exists in the
+#     configuration datastore.  If the configuration data does not
+#     exist, the "remove" operation is silently ignored by the
+#     server.
+
+def test_edit_config_remove_invalid_path():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+        <missing xc:operation="remove">1</missing>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test_error(payload, "malformed-message")
+
+
+def test_edit_config_remove_missing_data():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal>
+        <dog>
+          <colour xc:operation="remove">brown</colour>
+        </dog>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test_error(payload, "malformed-message")
 
 # TODO VALIDATE
 # TODO COPY-CONFIG
