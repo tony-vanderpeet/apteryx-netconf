@@ -3,6 +3,7 @@
 apteryx-netconf
 host.key
 host.key.pub
+.gcov/
 .build/
 __pycache__/
 

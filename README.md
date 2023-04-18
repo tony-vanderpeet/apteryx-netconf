@@ -3,7 +3,7 @@ Netconf daemon using Apteryx as its backend store.
 
 ## Requires
 ```
-apteryx glib-2.0 libyang libnetconf2
+apteryx glib-2.0, libxml-2.0
 ```
 
 ## Building
@@ -44,7 +44,10 @@ systemctl restart sshd
 # Build and run a local copy using openssh
 ./run.sh
 # Run the unit tests using pytest
-pytest
+python3 -m pytest
+python3 -m pytest -k test_server_capabilities
+
+google-chrome .gcov/index.html
 ```
 
 ## Examples
