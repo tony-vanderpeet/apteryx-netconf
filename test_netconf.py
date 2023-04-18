@@ -632,6 +632,37 @@ def test_get_config_no_state():
 # EDIT-CONFIG
 
 
+def _edit_config_test_no_error(payload, get_xpath, check_string):
+    """
+    Run an edit config test which is not expected to return an error. Check the
+    output returned from the specified get.
+    """
+    m = connect()
+    response = m.edit_config(target='running', config=payload)
+    print(response)
+    xml = m.get(filter=('xpath', get_xpath)).data
+    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    assert check_string in etree.XPath("//text()")(xml)
+    m.close_session()
+
+
+def _edit_config_test_error(payload, error_tag):
+    """
+    Run an edit config test which is expected to return an error. Check the
+    error code returned.
+    """
+    m = connect()
+    try:
+        response = m.edit_config(target='running', config=payload)
+    except RPCError as err:
+        assert err.tag == error_tag
+    else:
+        print(response)
+        assert False
+    finally:
+        m.close_session()
+
+
 def test_edit_config_node():
     m = connect()
     payload = """
@@ -672,7 +703,6 @@ def test_edit_config_multi():
 
 
 def test_edit_config_list():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
@@ -685,18 +715,12 @@ def test_edit_config_list():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    xml = m.get(filter=('xpath', '/test/animals')).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert 'frog' in etree.XPath("//text()")(xml)
-    m.close_session()
+    _edit_config_test_no_error(payload, "/test/animals", "frog")
 
 # EDIT-CONFIG (operation="delete")
 
 
 def test_edit_config_delete_invalid_path():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
@@ -706,12 +730,7 @@ def test_edit_config_delete_invalid_path():
   </test>
 </config>
 """
-    try:
-        m.edit_config(target='running', config=payload)
-    except RPCError as err:
-        print(err)
-        assert err.tag == 'malformed-message'
-    m.close_session()
+    _edit_config_test_error(payload, "malformed-message")
 
 
 def test_edit_config_delete_node():
@@ -733,7 +752,6 @@ def test_edit_config_delete_node():
 
 @pytest.mark.skip(reason="does not work - we return success even if there is no data")
 def test_edit_config_delete_no_data():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
@@ -743,14 +761,7 @@ def test_edit_config_delete_no_data():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    try:
-        response = m.edit_config(target='running', config=payload)
-    except RPCError as err:
-        print(err)
-        assert err.tag == 'data-missing'
-    m.close_session()
+    _edit_config_test_error(payload, "data-missing")
 
 
 def test_edit_config_delete_multi():
@@ -793,7 +804,6 @@ def test_edit_config_delete_trunk():
 
 @pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_list():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
@@ -806,12 +816,7 @@ def test_edit_config_delete_list():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    xml = m.get(filter=('xpath', '/test/animals')).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert 'cat' in etree.XPath("//text()")(xml)
-    m.close_session()
+    _edit_config_test_no_error(payload, "/test/animals", "cat")
 
 
 def test_edit_config_merge_delete():
