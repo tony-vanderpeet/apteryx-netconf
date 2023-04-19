@@ -652,7 +652,7 @@ def test_get_config_no_state():
 # EDIT-CONFIG
 
 
-def _edit_config_test_no_error(payload, get_xpath, check_string):
+def _edit_config_test_no_error(payload, get_xpath, in_string=[], out_string=[]):
     """
     Run an edit config test which is not expected to return an error. Check the
     output returned from the specified get.
@@ -662,7 +662,10 @@ def _edit_config_test_no_error(payload, get_xpath, check_string):
     print(response)
     xml = m.get(filter=('xpath', get_xpath)).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert check_string in etree.XPath("//text()")(xml)
+    for ins in in_string:
+        assert ins in etree.XPath("//text()")(xml)
+    for outs in out_string:
+        assert outs not in etree.XPath("//text()")(xml)
     m.close_session()
 
 
@@ -738,7 +741,7 @@ def test_edit_config_list():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", "frog")
+    _edit_config_test_no_error(payload, "/test/animals", in_string=["frog"])
 
 # EDIT-CONFIG (operation="delete")
 
@@ -846,7 +849,7 @@ def test_edit_config_delete_list():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", "cat")
+    _edit_config_test_no_error(payload, "/test/animals", in_string=["cat"])
 
 
 def test_edit_config_merge_delete():
@@ -880,6 +883,24 @@ def test_edit_config_merge_delete():
 #     configuration, only the configuration actually present in
 #     the <config> parameter is affected.
 
+@pytest.mark.skip(reason="doesn't replace entire animal element, type remains")
+def test_edit_config_replace_list_item():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal xc:operation="replace">
+            <name>cat</name>
+            <colour>brown</colour>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test_no_error(payload, "/test/animals", in_string=["brown"], out_string=["big"])
+
+
 # EDIT-CONFIG (operation=create)
 #  create:  The configuration data identified by the element
 #     containing this attribute is added to the configuration if
@@ -902,7 +923,7 @@ def test_edit_config_create_list_item():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", "penguin")
+    _edit_config_test_no_error(payload, "/test/animals", in_string=["penguin"])
 
 
 @pytest.mark.skip(reason="does not work yet")
@@ -937,7 +958,7 @@ def test_edit_config_create_list_item_field():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", "white")
+    _edit_config_test_no_error(payload, "/test/animals", in_string=["white"])
 
 
 @pytest.mark.skip(reason="does not work yet")
