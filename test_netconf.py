@@ -17,18 +17,40 @@ APTERYX = 'LD_LIBRARY_PATH=.build/usr/lib .build/usr/bin/apteryx'
 # TEST HELPERS
 
 db_default = [
-    ('/test/settings/debug', 'enable'),
+    # Default namespace
+    ('/test/settings/debug', '1'),
     ('/test/settings/enable', 'true'),
     ('/test/settings/priority', '1'),
-    ('/test/settings/lastmod', '1567898765'),
+    ('/test/settings/hidden', 'friend'),
     ('/test/state/counter', '42'),
+    ('/test/state/uptime/days', '5'),
+    ('/test/state/uptime/hours', '50'),
+    ('/test/state/uptime/minutes', '30'),
+    ('/test/state/uptime/seconds', '20'),
     ('/test/animals/animal/cat/name', 'cat'),
-    ('/test/animals/animal/cat/type', 'big'),
+    ('/test/animals/animal/cat/type', '1'),
     ('/test/animals/animal/dog/name', 'dog'),
     ('/test/animals/animal/dog/colour', 'brown'),
     ('/test/animals/animal/mouse/name', 'mouse'),
-    ('/test/animals/animal/mouse/type', 'little'),
+    ('/test/animals/animal/mouse/type', '2'),
     ('/test/animals/animal/mouse/colour', 'grey'),
+    ('/test/animals/animal/hamster/name', 'hamster'),
+    ('/test/animals/animal/hamster/type', '2'),
+    ('/test/animals/animal/hamster/food/banana/name', 'banana'),
+    ('/test/animals/animal/hamster/food/banana/type', 'fruit'),
+    ('/test/animals/animal/hamster/food/nuts/name', 'nuts'),
+    ('/test/animals/animal/hamster/food/nuts/type', 'kibble'),
+    ('/test/animals/animal/parrot/name', 'parrot'),
+    ('/test/animals/animal/parrot/type', '1'),
+    ('/test/animals/animal/parrot/colour', 'blue'),
+    ('/test/animals/animal/parrot/toys/toy/rings', 'rings'),
+    ('/test/animals/animal/parrot/toys/toy/puzzles', 'puzzles'),
+    # Default namespace augmented path
+    ('/test/settings/volume', '1'),
+    # Non-default namespace same path as default
+    ('/t2:test/settings/priority', '2'),
+    # Non-default namespace augmented path
+    ('/t2:test/settings/volume', '2'),
 ]
 
 
@@ -167,7 +189,7 @@ def test_get_subtree_trunk():
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
-            <lastmod>1567898765</lastmod>
+            <volume>1</volume>
         </settings>
     </test>
 </nc:data>
@@ -194,23 +216,40 @@ def test_get_subtree_list_container():
     select = '<test><animals/></test>'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test>
-        <animals>
-            <animal>
-                <name>cat</name>
-                <type>big</type>
-            </animal>
-            <animal>
-                <name>dog</name>
-                <colour>brown</colour>
-            </animal>
-            <animal>
-                <name>mouse</name>
-                <type>little</type>
-                <colour>grey</colour>
-            </animal>
-        </animals>
-    </test>
+  <test>
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type>big</type>
+      </animal>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+      <animal>
+        <name>hamster</name>
+        <type>little</type>
+        <food>
+          <name>banana</name>
+          <type>fruit</type>
+        </food>
+        <food>
+          <name>nuts</name>
+          <type>kibble</type>
+        </food>
+      </animal>
+      <animal>
+        <name>mouse</name>
+        <type>little</type>
+        <colour>grey</colour>
+      </animal>
+      <animal>
+        <name>parrot</name>
+        <type>big</type>
+        <colour>blue</colour>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
@@ -220,23 +259,40 @@ def test_get_subtree_list_element():
     select = '<test><animals><animal/></animals></test>'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test>
-        <animals>
-            <animal>
-                <name>cat</name>
-                <type>big</type>
-            </animal>
-            <animal>
-                <name>dog</name>
-                <colour>brown</colour>
-            </animal>
-            <animal>
-                <name>mouse</name>
-                <type>little</type>
-                <colour>grey</colour>
-            </animal>
-        </animals>
-    </test>
+  <test>
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type>big</type>
+      </animal>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+      <animal>
+        <name>hamster</name>
+        <type>little</type>
+        <food>
+          <name>banana</name>
+          <type>fruit</type>
+        </food>
+        <food>
+          <name>nuts</name>
+          <type>kibble</type>
+        </food>
+      </animal>
+      <animal>
+        <name>mouse</name>
+        <type>little</type>
+        <colour>grey</colour>
+      </animal>
+      <animal>
+        <name>parrot</name>
+        <type>big</type>
+        <colour>blue</colour>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
@@ -246,19 +302,25 @@ def test_get_subtree_list_parameter():
     select = '<test><animals><animal><name/></animal></animals></test>'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test>
-        <animals>
-            <animal>
-                <name>cat</name>
-            </animal>
-            <animal>
-                <name>dog</name>
-            </animal>
-            <animal>
-                <name>mouse</name>
-            </animal>
-        </animals>
-    </test>
+  <test>
+    <animals>
+      <animal>
+        <name>cat</name>
+      </animal>
+      <animal>
+        <name>dog</name>
+      </animal>
+      <animal>
+        <name>hamster</name>
+      </animal>
+      <animal>
+        <name>mouse</name>
+      </animal>
+      <animal>
+        <name>parrot</name>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
@@ -268,21 +330,29 @@ def test_get_subtree_selection_multi():
     select = '<test><animals><animal><name/><type/></animal></animals></test>'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test>
-        <animals>
-            <animal>
-                <name>cat</name>
-                <type>big</type>
-            </animal>
-            <animal>
-                <name>dog</name>
-            </animal>
-            <animal>
-                <name>mouse</name>
-                <type>little</type>
-            </animal>
-        </animals>
-    </test>
+  <test>
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type>big</type>
+      </animal>
+      <animal>
+        <name>dog</name>
+      </animal>
+      <animal>
+        <name>hamster</name>
+        <type>little</type>
+      </animal>
+      <animal>
+        <name>mouse</name>
+        <type>little</type>
+      </animal>
+      <animal>
+        <name>parrot</name>
+        <type>big</type>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
@@ -396,16 +466,22 @@ def test_get_subtree_select_no_key_other_field():
     select = '<test><animals><animal><type/></animal></animals></test>'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test>
-        <animals>
-            <animal>
-                <type>big</type>
-            </animal>
-            <animal>
-                <type>little</type>
-            </animal>
-        </animals>
-    </test>
+  <test>
+    <animals>
+      <animal>
+        <type>big</type>
+      </animal>
+      <animal>
+        <type>little</type>
+      </animal>
+      <animal>
+        <type>little</type>
+      </animal>
+      <animal>
+        <type>big</type>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
@@ -527,7 +603,7 @@ def test_get_xpath_trunk():
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
-            <lastmod>1567898765</lastmod>
+            <volume>1</volume>
         </settings>
     </test>
 </nc:data>
@@ -539,23 +615,40 @@ def test_get_xpath_list_trunk():
     xpath = '/test/animals'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-    <test>
-        <animals>
-            <animal>
-                <name>cat</name>
-                <type>big</type>
-            </animal>
-            <animal>
-                <name>dog</name>
-                <colour>brown</colour>
-            </animal>
-            <animal>
-                <name>mouse</name>
-                <type>little</type>
-                <colour>grey</colour>
-            </animal>
-        </animals>
-    </test>
+  <test>
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type>big</type>
+      </animal>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+      <animal>
+        <name>hamster</name>
+        <type>little</type>
+        <food>
+          <name>banana</name>
+          <type>fruit</type>
+        </food>
+        <food>
+          <name>nuts</name>
+          <type>kibble</type>
+        </food>
+      </animal>
+      <animal>
+        <name>mouse</name>
+        <type>little</type>
+        <colour>grey</colour>
+      </animal>
+      <animal>
+        <name>parrot</name>
+        <type>big</type>
+        <colour>blue</colour>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(xpath, expected, f_type='xpath')
@@ -643,8 +736,8 @@ def test_get_config_no_state():
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     # Full tree should be returned with config only
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
-    assert xml.find('./{*}test/{*}settings/{*}lastmod') is None
     assert xml.find('./{*}test/{*}state/{*}counter') is None
+    assert xml.find('./{*}test/{*}state/{*}uptime/days') is None
     assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
     # Ignore the rest!
     m.close_session()
@@ -811,7 +904,7 @@ def test_edit_config_delete_multi():
     print(response)
     xml = m.get(filter=('xpath', '/test/settings')).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', '1567898765']
+    assert etree.XPath("//text()")(xml) == ['enable', '1']
     m.close_session()
 
 
@@ -869,7 +962,7 @@ def test_edit_config_merge_delete():
     print(response)
     xml = m.get(filter=('xpath', '/test/settings')).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', 'false', '1567898765']
+    assert etree.XPath("//text()")(xml) == ['enable', 'false', '1']
     m.close_session()
 
 
