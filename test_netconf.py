@@ -50,7 +50,7 @@ db_default = [
     # Non-default namespace same path as default
     ('/t2:test/settings/priority', '2'),
     # Non-default namespace augmented path
-    ('/t2:test/settings/volume', '2'),
+    ('/t2:test/settings/speed', '2'),
 ]
 
 
@@ -173,6 +173,124 @@ def test_get_subtree_node():
     <test>
         <settings>
             <debug>enable</debug>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+# No default or prefixed namespace - we use the internal default namespace
+def test_get_subtree_node_ns_none():
+    select = '<test><settings><priority/></settings></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>1</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_node_ns_aug_none():
+    select = '<test><settings><volume/></settings></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <volume>1</volume>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+# Default namespace is the same as the internal default namespace
+def test_get_subtree_node_ns_default():
+    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><settings><priority/></settings></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>1</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_node_ns_aug_default():
+    select = '<test xmlns="https://github.com/alliedtelesis/apteryx"><settings><volume/></settings></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <volume>1</volume>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+# Default namespace is not the internal default namespace
+def test_get_subtree_node_ns_other_no_prefix():
+    select = '<test xmlns="http://test.com/ns/yang/testing-2"><settings><priority/></settings></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>2</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_node_ns_aug_other_no_prefix():
+    select = '<test xmlns="http://test.com/ns/yang/testing-2"><settings><speed xmlns="http://test.com/ns/yang/testing2-augmented"/></settings></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <speed>2</speed>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+# Prefixed namespace is not the internal default namespace
+# Note that prefixes are not inherited, so must be specified on every node
+
+def test_get_subtree_node_ns_other_prefix():
+    select = '<t2:test xmlns:t2="http://test.com/ns/yang/testing-2"><t2:settings><t2:priority/></t2:settings></t2:test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>2</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_node_ns_aug_other_prefix():
+    select = '<t2:test xmlns:t2="http://test.com/ns/yang/testing-2" xmlns:aug2="http://test.com/ns/yang/testing2-augmented"><t2:settings><aug2:speed/></t2:settings></t2:test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <speed>2</speed>
         </settings>
     </test>
 </nc:data>
@@ -593,6 +711,94 @@ def test_get_xpath_node():
     xml = _get_test_with_filter(xpath, expected, f_type='xpath')
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
 
+# No default or prefixed namespace - we use the internal default namespace
+def test_get_xpath_node_ns_none():
+    xpath = '/test/settings/priority'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>1</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '1'
+
+def test_get_xpath_node_ns_aug_none():
+    xpath = '/test/settings/volume'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <volume>1</volume>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}volume').text == '1'
+
+# Default namespace is the same as the internal default namespace
+@pytest.mark.skip(reason="does not work yet")
+def test_get_xpath_node_ns_default():
+    xpath = '/test:test/settings/priority'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>1</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '1'
+
+@pytest.mark.skip(reason="does not work yet")
+def test_get_xpath_node_ns_aug_default():
+    xpath = '/test:test/settings/volume'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <volume>1</volume>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}volume').text == '1'
+
+# Prefixed namespace is not the internal default namespace
+def test_get_xpath_node_ns_other():
+    xpath = '/t2:test/t2:settings/t2:priority'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <priority>2</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '2'
+
+def test_get_xpath_node_ns_aug_other():
+    xpath = '/t2:test/t2:settings/aug2:speed'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <settings>
+            <speed>2</speed>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}speed').text == '2'
 
 def test_get_xpath_trunk():
     xpath = '/test/settings'

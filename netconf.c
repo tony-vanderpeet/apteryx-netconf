@@ -359,6 +359,11 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
                 }
                 VERBOSE ("FILTER: XPATH: %s\n", attr);
                 query = sch_path_to_query (g_schema, NULL, attr, schflags | SCH_F_XPATH);
+                if (!query)
+                {
+                    VERBOSE ("XPATH: malformed filter\n");
+                    return send_rpc_error (session, rpc, "malformed-message");
+                }
             }
             else if (g_strcmp0 (attr, "subtree") == 0)
             {
@@ -367,7 +372,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
                     free (attr);
                     return send_rpc_data (session, rpc, NULL);
                 }
-                query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), SCH_F_STRIP_KEY);
+                query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags | SCH_F_STRIP_KEY);
                 if (!query)
                 {
                     VERBOSE ("SUBTREE: malformed query\n");
