@@ -420,7 +420,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
                     free (attr);
                     return send_rpc_data (session, rpc, NULL);
                 }
-                query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags | SCH_F_STRIP_KEY);
+                query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY);
                 if (!query)
                 {
                     VERBOSE ("SUBTREE: malformed query\n");

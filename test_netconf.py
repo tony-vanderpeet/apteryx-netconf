@@ -65,6 +65,7 @@ def run_around_tests():
     # After test
     os.system("echo After test")
     os.system("%s -r /test" % (APTERYX))
+    os.system("%s -r /t2:test" % (APTERYX))
 
 
 def connect():
@@ -588,22 +589,22 @@ def test_get_subtree_select_no_key_other_field():
     select = '<test><animals><animal><type/></animal></animals></test>'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <test>
-    <animals>
-      <animal>
-        <type>big</type>
-      </animal>
-      <animal>
-        <type>little</type>
-      </animal>
-      <animal>
-        <type>little</type>
-      </animal>
-      <animal>
-        <type>big</type>
-      </animal>
-    </animals>
-  </test>
+    <test>
+        <animals>
+            <animal>
+                <type>big</type>
+            </animal>
+            <animal>
+                <type>little</type>
+            </animal>
+            <animal>
+                <type>little</type>
+            </animal>
+            <animal>
+                <type>big</type>
+            </animal>
+        </animals>
+    </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
@@ -624,6 +625,12 @@ def test_get_subtree_select_no_key_other_field_value():
             </animal>
             <animal>
                 <type>little</type>
+            </animal>
+            <animal>
+                <type>little</type>
+            </animal>
+            <animal>
+                <type>big</type>
             </animal>
         </animals>
     </test>
@@ -649,8 +656,16 @@ def test_get_subtree_select_key_other_field_value():
                 <name>dog</name>
             </animal>
             <animal>
+                <name>hamster</name>
+                <type>little</type>
+            </animal>
+            <animal>
                 <name>mouse</name>
                 <type>little</type>
+            </animal>
+            <animal>
+                <name>parrot</name>
+                <type>big</type>
             </animal>
         </animals>
     </test>
@@ -665,12 +680,12 @@ def test_get_subtree_select_key_value_other_field_value():
     """
     select = """
 <test>
-  <animals>
-    <animal>
-      <name>mouse</name>
-      <type>little</type>
-    </animal>
-  </animals>
+    <animals>
+        <animal>
+            <name>mouse</name>
+            <type>little</type>
+        </animal>
+    </animals>
 </test>
     """
     expected = """
