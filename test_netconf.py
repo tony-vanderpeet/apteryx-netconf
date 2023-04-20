@@ -106,7 +106,7 @@ def diffXML(a, b):
 def test_server_capabilities():
     m = connect()
     for capability in m.server_capabilities:
-        print("Capability: %s" % capability.split('?')[0])
+        print("Capability: %s" % capability)
     assert ":base" in m.server_capabilities
     assert ":writable-running" in m.server_capabilities
     # assert ":startup" in m.server_capabilities
@@ -121,6 +121,10 @@ def test_server_capabilities():
     assert ":power-control" not in m.server_capabilities
     assert ":notification" not in m.server_capabilities
     assert ":interleave" not in m.server_capabilities
+    # Supported models - first is default namespace
+    assert "https://github.com/alliedtelesis/apteryx?module=testing&revision=2023-01-01" in m.server_capabilities
+    assert "http://test.com/ns/yang/testing-2?module=testing-2&revision=2023-02-01" in m.server_capabilities
+    assert "http://test.com/ns/yang/testing2-augmented?module=testing2-augmented&revision=2023-02-02" in m.server_capabilities
     m.close_session()
 
 # GET SUBTREE

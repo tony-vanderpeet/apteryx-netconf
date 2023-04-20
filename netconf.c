@@ -198,13 +198,57 @@ send_rpc_data (struct netconf_session *session, xmlNode * rpc, xmlNode * data)
     return ret;
 }
 
+static void
+traverse_schema_add_model (xmlNode *cap, sch_node *node)
+{
+    sch_node *sch_child;
+    xmlNode *xml_child;
+
+    for (sch_child = sch_node_child_first(node); sch_child; sch_child = sch_node_next_sibling (sch_child))
+    {
+        char *model = sch_model (sch_child, true);
+        if (model)
+        {
+            char capability[1024];
+            char *organization = sch_organization (sch_child);
+            char *revision = sch_version (sch_child);
+            char *ns = NULL;
+            xmlNode *xml = (xmlNode *) sch_child;
+
+            if (xml->ns)
+            {
+                ns = g_strdup ((const char *) xml->ns->href);
+            }
+
+            if (organization && revision && model &&
+                strlen (organization) && strlen (revision) && strlen (model))
+            {
+                xml_child = xmlNewChild (cap, NULL, BAD_CAST "nc:capability", NULL);
+                g_snprintf (capability, sizeof (capability),
+                            "%s?module=%s&amp;revision=%s",
+                            ns, model, revision);
+                xmlNodeSetContent (xml_child, BAD_CAST capability);
+            }
+            g_free (organization);
+            g_free (revision);
+            g_free (model);
+            g_free (ns);
+        }
+
+        /* Traverse deeper */
+        traverse_schema_add_model (cap, sch_child);
+    }
+}
+
+static xmlChar *hello_resp = NULL;
+static int hello_resp_len = 0;
+
 static bool
 handle_hello (struct netconf_session *session)
 {
     bool ret = true;
     xmlDoc *doc = NULL;
     xmlNode *root, *node, *child;
-    xmlChar *xmlbuff;
     char buffer[4096];
     char *endpt;
     int len;
@@ -247,31 +291,37 @@ handle_hello (struct netconf_session *session)
     xmlFreeDoc (doc);
 
     /* Generate reply */
-    doc = xmlNewDoc (BAD_CAST "1.0");
-    root = xmlNewNode (NULL, BAD_CAST "nc:hello");
-    xmlNewProp (root, BAD_CAST "xmlns:nc",
-                BAD_CAST "urn:ietf:params:xml:ns:netconf:base:1.0");
-    xmlDocSetRootElement (doc, root);
-    node = xmlNewChild (root, NULL, BAD_CAST "nc:capabilities", NULL);
-    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:base:1.1");
-    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
-    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
-    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-    xmlNodeSetContent (child,
-                       BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
-    xmlDocDumpMemoryEnc (doc, &xmlbuff, &len, "UTF-8");
+    if (hello_resp == NULL)
+    {
+        doc = xmlNewDoc (BAD_CAST "1.0");
+        root = xmlNewNode (NULL, BAD_CAST "nc:hello");
+        xmlNewProp (root, BAD_CAST "xmlns:nc",
+                    BAD_CAST "urn:ietf:params:xml:ns:netconf:base:1.0");
+        xmlDocSetRootElement (doc, root);
+        node = xmlNewChild (root, NULL, BAD_CAST "nc:capabilities", NULL);
+        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+        xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:base:1.1");
+        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+        xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
+        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+        xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
+        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+        xmlNodeSetContent (child,
+                        BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
+        /* Find all models in the entire tree */
+        traverse_schema_add_model (node, (sch_node *) g_schema);
+        xmlDocDumpMemoryEnc (doc, &hello_resp, &hello_resp_len, "UTF-8");
+        xmlFreeDoc (doc);
+    }
 
     /* Send reply */
-    if (write (session->fd, xmlbuff, len) != len)
+    if (write (session->fd, hello_resp, hello_resp_len) != hello_resp_len)
     {
-        ERROR ("TX failed: Sending %d bytes of hello\n", len);
+        ERROR ("TX failed: Sending %d bytes of hello\n", hello_resp_len);
         ret = false;
         goto cleanup;
     }
-    VERBOSE ("TX(%d):\n%.*s", len, len, (char *) xmlbuff);
+    VERBOSE ("TX(%d):\n%.*s", hello_resp_len, hello_resp_len, (char *) hello_resp);
     if (write (session->fd, NETCONF_BASE_1_0_END, strlen (NETCONF_BASE_1_0_END)) !=
         strlen (NETCONF_BASE_1_0_END))
     {
@@ -283,8 +333,6 @@ handle_hello (struct netconf_session *session)
     VERBOSE ("TX(%ld):\n%s\n", strlen (NETCONF_BASE_1_0_END), NETCONF_BASE_1_0_END);
 
   cleanup:
-    xmlFree (xmlbuff);
-    xmlFreeDoc (doc);
     return ret;
 }
 
@@ -685,4 +733,6 @@ netconf_shutdown (void)
     /* Cleanup datamodels */
     if (g_schema)
         sch_free (g_schema);
+    if (hello_resp)
+        xmlFree (hello_resp);
 }
