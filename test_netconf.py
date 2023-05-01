@@ -122,6 +122,7 @@ def test_server_capabilities():
     assert ":power-control" not in m.server_capabilities
     assert ":notification" not in m.server_capabilities
     assert ":interleave" not in m.server_capabilities
+    assert ":session-id" not in m.server_capabilities
     # Supported models - first is default namespace
     assert "https://github.com/alliedtelesis/apteryx?module=testing&revision=2023-01-01" in m.server_capabilities
     assert "http://test.com/ns/yang/testing-2?module=testing-2&revision=2023-02-01" in m.server_capabilities

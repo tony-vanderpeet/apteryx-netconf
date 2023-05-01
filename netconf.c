@@ -27,13 +27,16 @@ static sch_instance *g_schema = NULL;
 struct netconf_session
 {
     int fd;
+    uint32_t id;
 };
 
 #define NETCONF_BASE_1_0_END "]]>]]>"
 #define NETCONF_BASE_1_1_END "\n##\n"
 
+static uint32_t netconf_session_id = 1;
+
 static bool
-send_rpc_ok (struct netconf_session *session, xmlNode * rpc)
+send_rpc_ok (struct netconf_session *session, xmlNode * rpc, bool closing)
 {
     xmlDoc *doc;
     xmlNode *root;
@@ -57,14 +60,20 @@ send_rpc_ok (struct netconf_session *session, xmlNode * rpc)
     /* Send reply */
     if (write (session->fd, header, strlen (header)) != strlen (header))
     {
-        ERROR ("TX failed: Sending %ld bytes of header\n", strlen (header));
+        if (!closing)
+        {
+            ERROR ("TX failed: Sending %ld bytes of header\n", strlen (header));
+        }
         ret = false;
         goto cleanup;
     }
     VERBOSE ("TX(%ld):\n%s", strlen (header), header);
     if (write (session->fd, xmlbuff, len) != len)
     {
-        ERROR ("TX failed: Sending %d bytes of hello\n", len);
+        if (!closing)
+        {
+            ERROR ("TX failed: Sending %d bytes of hello\n", len);
+        }
         ret = false;
         goto cleanup;
     }
@@ -72,7 +81,11 @@ send_rpc_ok (struct netconf_session *session, xmlNode * rpc)
     if (write (session->fd, NETCONF_BASE_1_1_END, strlen (NETCONF_BASE_1_1_END)) !=
         strlen (NETCONF_BASE_1_1_END))
     {
-        ERROR ("TX failed: Sending %ld bytes of trailer\n", strlen (NETCONF_BASE_1_1_END));
+        if (!closing)
+        {
+            ERROR ("TX failed: Sending %ld bytes of trailer\n",
+                   strlen (NETCONF_BASE_1_1_END));
+        }
         ret = false;
         goto cleanup;
     }
@@ -240,17 +253,17 @@ traverse_schema_add_model (xmlNode *cap, sch_node *node)
     }
 }
 
-static xmlChar *hello_resp = NULL;
-static int hello_resp_len = 0;
-
 static bool
 handle_hello (struct netconf_session *session)
 {
     bool ret = true;
     xmlDoc *doc = NULL;
     xmlNode *root, *node, *child;
+    xmlChar *hello_resp = NULL;
     char buffer[4096];
+    char session_id_str[32];
     char *endpt;
+    int hello_resp_len = 0;
     int len;
 
     /* Read all of the hello from the peer */
@@ -291,28 +304,28 @@ handle_hello (struct netconf_session *session)
     xmlFreeDoc (doc);
 
     /* Generate reply */
-    if (hello_resp == NULL)
-    {
-        doc = xmlNewDoc (BAD_CAST "1.0");
-        root = xmlNewNode (NULL, BAD_CAST "nc:hello");
-        xmlNewProp (root, BAD_CAST "xmlns:nc",
-                    BAD_CAST "urn:ietf:params:xml:ns:netconf:base:1.0");
-        xmlDocSetRootElement (doc, root);
-        node = xmlNewChild (root, NULL, BAD_CAST "nc:capabilities", NULL);
-        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-        xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:base:1.1");
-        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-        xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
-        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-        xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
-        child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-        xmlNodeSetContent (child,
-                        BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
-        /* Find all models in the entire tree */
-        traverse_schema_add_model (node, (sch_node *) g_schema);
-        xmlDocDumpMemoryEnc (doc, &hello_resp, &hello_resp_len, "UTF-8");
-        xmlFreeDoc (doc);
-    }
+    doc = xmlNewDoc (BAD_CAST "1.0");
+    root = xmlNewNode (NULL, BAD_CAST "nc:hello");
+    xmlNewProp (root, BAD_CAST "xmlns:nc",
+                BAD_CAST "urn:ietf:params:xml:ns:netconf:base:1.0");
+    xmlDocSetRootElement (doc, root);
+    node = xmlNewChild (root, NULL, BAD_CAST "nc:capabilities", NULL);
+    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:base:1.1");
+    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
+    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
+    child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
+    xmlNodeSetContent (child,
+                       BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
+    /* Find all models in the entire tree */
+    traverse_schema_add_model (node, (sch_node *) g_schema);
+    snprintf (session_id_str, sizeof (session_id_str), "%u", session->id);
+    node = xmlNewChild (root, NULL, BAD_CAST "nc:session-id", NULL);
+    xmlNodeSetContent (node, BAD_CAST session_id_str);
+    xmlDocDumpMemoryEnc (doc, &hello_resp, &hello_resp_len, "UTF-8");
+    xmlFreeDoc (doc);
 
     /* Send reply */
     if (write (session->fd, hello_resp, hello_resp_len) != hello_resp_len)
@@ -333,6 +346,7 @@ handle_hello (struct netconf_session *session)
     VERBOSE ("TX(%ld):\n%s\n", strlen (NETCONF_BASE_1_0_END), NETCONF_BASE_1_0_END);
 
   cleanup:
+    xmlFree (hello_resp);
     return ret;
 }
 
@@ -523,7 +537,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     apteryx_free_tree (tree);
 
     /* Success */
-    return send_rpc_ok (session, rpc);
+    return send_rpc_ok (session, rpc, false);
 }
 
 static struct netconf_session *
@@ -531,6 +545,13 @@ create_session (int fd)
 {
     struct netconf_session *session = g_malloc (sizeof (struct netconf_session));
     session->fd = fd;
+    session->id = netconf_session_id++;
+
+    /* If the counter rounds, then the value 0 is not allowed */
+    if (!session->id)
+    {
+        session->id = netconf_session_id++;
+    }
     return session;
 }
 
@@ -676,7 +697,7 @@ netconf_handle_session (int fd)
         if (g_strcmp0 ((char *) child->name, "close-session") == 0)
         {
             VERBOSE ("Closing session\n");
-            send_rpc_ok (session, rpc);
+            send_rpc_ok (session, rpc, true);
             xmlFreeDoc (doc);
             g_free (message);
             break;
@@ -724,6 +745,10 @@ netconf_init (const char *path, const char *cp, const char *rm)
         return false;
     }
 
+    /* Create a random starting session ID */
+    srand (time (NULL));
+    netconf_session_id = rand () % 32768;
+
     return true;
 }
 
@@ -733,6 +758,4 @@ netconf_shutdown (void)
     /* Cleanup datamodels */
     if (g_schema)
         sch_free (g_schema);
-    if (hello_resp)
-        xmlFree (hello_resp);
 }
