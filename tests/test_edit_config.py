@@ -159,7 +159,23 @@ def test_edit_config_delete_trunk():
     assert etree.XPath("//text()")(xml) == []
 
 
-@pytest.mark.skip(reason="does not work yet")
+@pytest.mark.skip(reason="does not give data-missing error")
+def test_edit_config_delete_missing():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal xc:operation="delete">
+        <name>unicorn</name>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err='data-missing')
+
+
+@pytest.mark.skip(reason="does not delete animal[cat]")
 def test_edit_config_delete_list():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
@@ -168,7 +184,6 @@ def test_edit_config_delete_list():
     <animals>
         <animal xc:operation="delete">
             <name>cat</name>
-            <type>big</type>
         </animal>
     </animals>
   </test>
@@ -222,6 +237,71 @@ def test_edit_config_replace_list_item():
     _edit_config_test(payload, post_xpath="/test/animals", inc_str=["brown"], exc_str=["big"])
 
 
+@pytest.mark.skip(reason="doesn't replace entire animals list")
+def test_edit_config_replace_all():
+    """
+    Replace all animals with one (existing) animal.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals xc:operation="replace">
+      <animal>
+        <name>cat</name>
+        <type>big</type>
+        <colour>tawny</colour>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath='/test/animals', inc_str=["cat"], exc_str=["dog", "mouse"])
+
+
+def test_edit_config_replace_one_full():
+    """
+    Replace one animal. Fully specify the replacement.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal xc:operation="replace">
+        <name>cat</name>
+        <type>little</type>
+        <colour>tawny</colour>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/animals', inc_str=["cat", "dog", "mouse"])
+    assert xml.find('./{*}test/{*}animals/{*}animal[name="cat"]/{*}type').text == 'little'
+    assert xml.find('./{*}test/{*}animals/{*}animal[name="cat"]/{*}colour').text == 'tawny'
+
+
+@pytest.mark.skip(reason="leaves pre-existing config in place")
+def test_edit_config_replace_one_default():
+    """
+    Replace one animal. Allow all values to revert to default.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal xc:operation="replace">
+        <name>mouse</name>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/animals', inc_str=["cat", "dog", "mouse"])
+    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    assert xml.find('./{*}test/{*}animals/{*}animal[name="mouse"]/{*}type').text == 'big'
+    assert xml.find('./{*}test/{*}animals/{*}animal[name="mouse"]/{*}colour') is None
+
+
 # EDIT-CONFIG (operation=create)
 #  create:  The configuration data identified by the element
 #     containing this attribute is added to the configuration if
@@ -247,7 +327,7 @@ def test_edit_config_create_list_item():
     _edit_config_test(payload, post_xpath="/test/animals", inc_str=["penguin"])
 
 
-@pytest.mark.skip(reason="does not work yet")
+@pytest.mark.skip(reason="does not return data-exists")
 def test_edit_config_create_list_item_exists():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
@@ -282,7 +362,7 @@ def test_edit_config_create_list_item_field():
     _edit_config_test(payload, post_xpath="/test/animals", inc_str=["white"])
 
 
-@pytest.mark.skip(reason="does not work yet")
+@pytest.mark.skip(reason="does not return data-exists")
 def test_edit_config_create_list_item_field_exists():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
