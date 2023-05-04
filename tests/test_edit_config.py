@@ -6,42 +6,37 @@ from conftest import connect
 # EDIT-CONFIG
 
 
-def _edit_config_test_no_error(payload, get_xpath, in_string=[], out_string=[]):
+def _edit_config_test(payload, expect_err=None, post_xpath=None, inc_str=[], exc_str=[]):
     """
-    Run an edit config test which is not expected to return an error. Check the
-    output returned from the specified get.
-    """
-    m = connect()
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    xml = m.get(filter=('xpath', get_xpath)).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    for ins in in_string:
-        assert ins in etree.XPath("//text()")(xml)
-    for outs in out_string:
-        assert outs not in etree.XPath("//text()")(xml)
-    m.close_session()
-
-
-def _edit_config_test_error(payload, error_tag):
-    """
-    Run an edit config test which is expected to return an error. Check the
-    error code returned.
+    Run an edit-config with the given payload, optionally checking for error, and
+    strings that should be included or excluded in the response,
+    returning the response from a get carried out with the optional given xpath.
     """
     m = connect()
+    xml = None
     try:
         response = m.edit_config(target='running', config=payload)
-    except RPCError as err:
-        assert err.tag == error_tag
-    else:
         print(response)
-        assert False
+    except RPCError as err:
+        print(err)
+        assert expect_err is not None
+        assert err.tag == expect_err
+    else:
+        assert expect_err is None
+        if post_xpath is not None:
+            xml = m.get(filter=('xpath', post_xpath)).data
+            print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+            if len(inc_str) + len(exc_str) != 0:
+                for s in inc_str:
+                    assert s in etree.XPath("//text()")(xml)
+                for s in exc_str:
+                    assert s not in etree.XPath("//text()")(xml)
     finally:
         m.close_session()
+    return xml
 
 
 def test_edit_config_node():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -52,15 +47,11 @@ def test_edit_config_node():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    check_edit = m.get(filter=('xpath', '/test/settings/priority'))
-    assert check_edit.data.find('./{*}test/{*}settings/{*}priority').text == '99'
-    m.close_session()
+    xml = _edit_config_test(payload, post_xpath='/test/settings/priority')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '99'
 
 
 def test_edit_config_multi():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -72,13 +63,9 @@ def test_edit_config_multi():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    check_edit = m.get(filter=('xpath', '/test/settings/enable'))
-    assert check_edit.data.find('./{*}test/{*}settings/{*}enable').text == 'false'
-    check_edit = m.get(filter=('xpath', '/test/settings/priority'))
-    assert check_edit.data.find('./{*}test/{*}settings/{*}priority').text == '99'
-    m.close_session()
+    xml = _edit_config_test(payload, post_xpath='/test/settings')
+    assert xml.find('./{*}test/{*}settings/{*}enable').text == 'false'
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '99'
 
 
 def test_edit_config_list():
@@ -95,7 +82,7 @@ def test_edit_config_list():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", in_string=["frog"])
+    _edit_config_test(payload, post_xpath="/test/animals", inc_str=["frog"])
 
 # EDIT-CONFIG (operation="delete")
 
@@ -106,16 +93,15 @@ def test_edit_config_delete_invalid_path():
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
-        <missing operation="delete">1</missing>
+        <missing xc:operation="delete">1</missing>
     </settings>
   </test>
 </config>
 """
-    _edit_config_test_error(payload, "malformed-message")
+    _edit_config_test(payload, expect_err="malformed-message")
 
 
 def test_edit_config_delete_node():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -126,30 +112,25 @@ def test_edit_config_delete_node():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    filt = ('xpath', '/test/settings/priority')
-    assert m.get(filter=filt).data.find('./{*}test/{*}settings/{*}priority') is None
-    m.close_session()
+    xml = _edit_config_test(payload, post_xpath='/test/settings/priority')
+    assert xml.find('./{*}test/{*}settings/{*}priority') is None
 
 
-@pytest.mark.skip(reason="does not work - we return success even if there is no data")
 def test_edit_config_delete_no_data():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
-        <priority xc:operation="delete">1</priority>
+        <priority xc:operation="delete"></priority>
     </settings>
   </test>
 </config>
 """
-    _edit_config_test_error(payload, "data-missing")
+    _edit_config_test(payload, post_xpath='/test/settings', exc_str=["priority"])
 
 
 def test_edit_config_delete_multi():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -161,17 +142,10 @@ def test_edit_config_delete_multi():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    xml = m.get(filter=('xpath', '/test/settings')).data
-    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', '1']
-    m.close_session()
+    _edit_config_test(payload, post_xpath='/test/settings', exc_str=['<enable>', '<priority>'])
 
 
-@pytest.mark.skip(reason="does not work yet")
 def test_edit_config_delete_trunk():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -180,12 +154,9 @@ def test_edit_config_delete_trunk():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    xml = m.get(filter=('xpath', '/test/settings')).data
+    xml = _edit_config_test(payload, post_xpath='/test/settings')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert etree.XPath("//text()")(xml) == []
-    m.close_session()
 
 
 @pytest.mark.skip(reason="does not work yet")
@@ -203,11 +174,10 @@ def test_edit_config_delete_list():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", in_string=["cat"])
+    _edit_config_test(payload, post_xpath="/test/animals", exc_str=["cat"])
 
 
 def test_edit_config_merge_delete():
-    m = connect()
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -219,12 +189,9 @@ def test_edit_config_merge_delete():
   </test>
 </config>
 """
-    response = m.edit_config(target='running', config=payload)
-    print(response)
-    xml = m.get(filter=('xpath', '/test/settings')).data
+    xml = _edit_config_test(payload, post_xpath='/test/settings')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert etree.XPath("//text()")(xml) == ['enable', 'false', '1']
-    m.close_session()
 
 
 # EDIT-CONFIG (operation=replace)
@@ -252,7 +219,7 @@ def test_edit_config_replace_list_item():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", in_string=["brown"], out_string=["big"])
+    _edit_config_test(payload, post_xpath="/test/animals", inc_str=["brown"], exc_str=["big"])
 
 
 # EDIT-CONFIG (operation=create)
@@ -277,7 +244,7 @@ def test_edit_config_create_list_item():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", in_string=["penguin"])
+    _edit_config_test(payload, post_xpath="/test/animals", inc_str=["penguin"])
 
 
 @pytest.mark.skip(reason="does not work yet")
@@ -295,7 +262,7 @@ def test_edit_config_create_list_item_exists():
   </test>
 </config>
 """
-    _edit_config_test_error(payload, "data-exists")
+    _edit_config_test(payload, expect_err="data-exists")
 
 
 def test_edit_config_create_list_item_field():
@@ -312,7 +279,7 @@ def test_edit_config_create_list_item_field():
   </test>
 </config>
 """
-    _edit_config_test_no_error(payload, "/test/animals", in_string=["white"])
+    _edit_config_test(payload, post_xpath="/test/animals", inc_str=["white"])
 
 
 @pytest.mark.skip(reason="does not work yet")
@@ -330,7 +297,7 @@ def test_edit_config_create_list_item_field_exists():
   </test>
 </config>
 """
-    _edit_config_test_error(payload, "data-exists")
+    _edit_config_test(payload, expect_err="data-exists")
 
 
 # EDIT-CONFIG (operation=remove)
@@ -352,7 +319,7 @@ def test_edit_config_remove_invalid_path():
   </test>
 </config>
 """
-    _edit_config_test_error(payload, "malformed-message")
+    _edit_config_test(payload, expect_err="malformed-message")
 
 
 def test_edit_config_remove_missing_data():
@@ -370,4 +337,4 @@ def test_edit_config_remove_missing_data():
   </test>
 </config>
 """
-    _edit_config_test_error(payload, "malformed-message")
+    _edit_config_test(payload, expect_err="malformed-message")
