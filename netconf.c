@@ -212,44 +212,27 @@ send_rpc_data (struct netconf_session *session, xmlNode * rpc, xmlNode * data)
 }
 
 static void
-traverse_schema_add_model (xmlNode *cap, sch_node *node)
+schema_set_model_information (xmlNode *cap)
 {
-    sch_node *sch_child;
     xmlNode *xml_child;
+    sch_loaded_model *loaded;
+    GList *list;
+    char *capability;
+    GList *loaded_models = sch_get_loaded_models ();
 
-    for (sch_child = sch_node_child_first(node); sch_child; sch_child = sch_node_next_sibling (sch_child))
+    for (list = g_list_first (loaded_models); list; list = g_list_next (list))
     {
-        char *model = sch_model (sch_child, true);
-        if (model)
+        loaded = list->data;
+        if (loaded->organization && loaded->version && loaded->model &&
+            strlen (loaded->organization) && strlen (loaded->version) &&
+            strlen (loaded->model))
         {
-            char capability[1024];
-            char *organization = sch_organization (sch_child);
-            char *revision = sch_version (sch_child);
-            char *ns = NULL;
-            xmlNode *xml = (xmlNode *) sch_child;
-
-            if (xml->ns)
-            {
-                ns = g_strdup ((const char *) xml->ns->href);
-            }
-
-            if (organization && revision && model &&
-                strlen (organization) && strlen (revision) && strlen (model))
-            {
-                xml_child = xmlNewChild (cap, NULL, BAD_CAST "nc:capability", NULL);
-                g_snprintf (capability, sizeof (capability),
-                            "%s?module=%s&amp;revision=%s",
-                            ns, model, revision);
-                xmlNodeSetContent (xml_child, BAD_CAST capability);
-            }
-            g_free (organization);
-            g_free (revision);
-            g_free (model);
-            g_free (ns);
+            xml_child = xmlNewChild (cap, NULL, BAD_CAST "nc:capability", NULL);
+            capability = g_strdup_printf ("%s?module=%s&amp;revision=%s",
+                                          loaded->ns, loaded->model, loaded->version);
+            xmlNodeSetContent (xml_child, BAD_CAST capability);
+            g_free (capability);
         }
-
-        /* Traverse deeper */
-        traverse_schema_add_model (cap, sch_child);
     }
 }
 
@@ -320,7 +303,7 @@ handle_hello (struct netconf_session *session)
     xmlNodeSetContent (child,
                        BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
     /* Find all models in the entire tree */
-    traverse_schema_add_model (node, (sch_node *) g_schema);
+    schema_set_model_information (node);
     snprintf (session_id_str, sizeof (session_id_str), "%u", session->id);
     node = xmlNewChild (root, NULL, BAD_CAST "nc:session-id", NULL);
     xmlNodeSetContent (node, BAD_CAST session_id_str);
