@@ -218,7 +218,7 @@ schema_set_model_information (xmlNode *cap)
     sch_loaded_model *loaded;
     GList *list;
     char *capability;
-    GList *loaded_models = sch_get_loaded_models ();
+    GList *loaded_models = sch_get_loaded_models (g_schema);
 
     for (list = g_list_first (loaded_models); list; list = g_list_next (list))
     {
