@@ -363,6 +363,7 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
     xmlNode *node;
     char *attr;
     GNode *query = NULL;
+    sch_xml_to_gnode_parms parms;
     GNode *tree;
     xmlNode *xml = NULL;
     int schflags = 0;
@@ -417,7 +418,10 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
                     free (attr);
                     return send_rpc_data (session, rpc, NULL);
                 }
-                query = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY);
+                parms = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY,
+                                          "none", false);
+                query = sch_parm_tree (parms);
+                sch_parm_free (parms);
                 if (!query)
                 {
                     VERBOSE ("SUBTREE: malformed query\n");
@@ -466,13 +470,38 @@ xmlFindNodeByName (xmlNode * root, const xmlChar * name)
     return NULL;
 }
 
+/**
+ * Check for existence of data at a particular xpath or below. This is
+ * required for NC_OP_CREATE and NC_OP_DELETE. Fill in the error_tag if we don't
+ * get expected result, otherwise leave it alone (so we can accumulate errors).
+ */
+static void
+_check_exist (const char *check_xpath, char **error_tag, bool expected)
+{
+    GNode *check_result;
+
+    check_result = apteryx_get_tree (check_xpath);
+    if (check_result && !expected)
+    {
+        *error_tag = "data-exists";
+    }
+    else if (!check_result && expected)
+    {
+        *error_tag = "data-missing";
+    }
+    apteryx_free_tree (check_result);
+}
+
 static bool
 handle_edit (struct netconf_session *session, xmlNode * rpc)
 {
     xmlNode *action = xmlFirstElementChild (rpc);
     xmlNode *node;
     GNode *tree = NULL;
+    char *error_tag;
+    sch_xml_to_gnode_parms parms;
     int schflags = 0;
+    GList *iter;
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
@@ -500,12 +529,47 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     }
 
     /* Convert to gnode */
-    tree = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags);
-    if (!tree)
+    parms = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, "merge", true);
+    tree = sch_parm_tree (parms);
+    error_tag = sch_parm_error_tag (parms);
+
+    if (error_tag)
     {
-        VERBOSE ("SETTREE: malformed tree\n");
-        return send_rpc_error (session, rpc, "malformed-message");
+        VERBOSE ("error parsing XML\n");
+        sch_parm_free (parms);
+        return send_rpc_error (session, rpc, error_tag);
     }
+
+    /* Check delete and create paths */
+    for (iter = sch_parm_deletes (parms); iter; iter = g_list_next (iter))
+    {
+        _check_exist ((char *) iter->data, &error_tag, true);
+    }
+    for (iter = sch_parm_creates (parms); iter; iter = g_list_next (iter))
+    {
+        _check_exist ((char *) iter->data, &error_tag, false);
+    }
+    if (error_tag)
+    {
+        VERBOSE ("error in delete or create paths\n");
+        sch_parm_free (parms);
+        return send_rpc_error (session, rpc, error_tag);
+    }
+
+    /* Delete delete, remove and replace paths */
+    for (iter = sch_parm_deletes (parms); iter; iter = g_list_next (iter))
+    {
+        apteryx_prune (iter->data);
+    }
+    for (iter = sch_parm_removes (parms); iter; iter = g_list_next (iter))
+    {
+        apteryx_prune (iter->data);
+    }
+    for (iter = sch_parm_replaces (parms); iter; iter = g_list_next (iter))
+    {
+        apteryx_prune (iter->data);
+    }
+    sch_parm_free (parms);
 
     //TODO - permissions
     //TODO - patterns
