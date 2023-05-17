@@ -537,6 +537,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     {
         VERBOSE ("error parsing XML\n");
         sch_parm_free (parms);
+        apteryx_free_tree (tree);
         return send_rpc_error (session, rpc, error_tag);
     }
 
@@ -553,6 +554,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     {
         VERBOSE ("error in delete or create paths\n");
         sch_parm_free (parms);
+        apteryx_free_tree (tree);
         return send_rpc_error (session, rpc, error_tag);
     }
 
