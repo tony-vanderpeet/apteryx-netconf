@@ -229,7 +229,7 @@ schema_set_model_information (xmlNode *cap)
         {
             xml_child = xmlNewChild (cap, NULL, BAD_CAST "nc:capability", NULL);
             capability = g_strdup_printf ("%s?module=%s&amp;revision=%s",
-                                          loaded->ns, loaded->model, loaded->version);
+                                          loaded->ns_href, loaded->model, loaded->version);
             xmlNodeSetContent (xml_child, BAD_CAST capability);
             g_free (capability);
         }
