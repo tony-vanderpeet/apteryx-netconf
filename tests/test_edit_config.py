@@ -42,13 +42,13 @@ def test_edit_config_node():
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
     <settings>
-        <priority>99</priority>
+        <priority>5</priority>
     </settings>
   </test>
 </config>
 """
     xml = _edit_config_test(payload, post_xpath='/test/settings/priority')
-    assert xml.find('./{*}test/{*}settings/{*}priority').text == '99'
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '5'
 
 
 def test_edit_config_multi():
@@ -58,14 +58,14 @@ def test_edit_config_multi():
   <test>
     <settings>
         <enable>false</enable>
-        <priority>99</priority>
+        <priority>4</priority>
     </settings>
   </test>
 </config>
 """
     xml = _edit_config_test(payload, post_xpath='/test/settings')
     assert xml.find('./{*}test/{*}settings/{*}enable').text == 'false'
-    assert xml.find('./{*}test/{*}settings/{*}priority').text == '99'
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '4'
 
 
 def test_edit_config_list():

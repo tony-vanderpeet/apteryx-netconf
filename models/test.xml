@@ -77,5 +77,8 @@
         </NODE>
       </NODE>
     </NODE>
+    <NODE name="patterns">
+      <NODE name="variable_1" mode="rw" help="variable to test /(flash|card|usb):/?[\.A-Za-z0-9_\-]{1,251}\.cfg/" pattern="(flash|card|usb):/?[\.A-Za-z0-9_\-]{1,251}\.cfg"/>
+    </NODE>
   </NODE>
 </MODULE>
