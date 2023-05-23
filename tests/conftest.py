@@ -2,6 +2,7 @@ import os
 import pytest
 from ncclient import manager
 from lxml import etree
+import subprocess
 
 # TEST CONFIGURATION
 
@@ -11,6 +12,8 @@ username = 'manager'
 password = 'friend'
 
 APTERYX = 'LD_LIBRARY_PATH=.build/usr/lib .build/usr/bin/apteryx'
+# APTERYX_URL='tcp://192.168.6.2:9999:'
+APTERYX_URL = ''
 
 # TEST HELPERS
 
@@ -52,18 +55,36 @@ db_default = [
 ]
 
 
+def apteryx_set(path, value):
+    assert subprocess.check_output('%s -s %s%s "%s"' % (APTERYX, APTERYX_URL, path, value), shell=True).strip().decode('utf-8') != "Failed"
+
+
+def apteryx_get(path):
+    return subprocess.check_output("%s -g %s%s" % (APTERYX, APTERYX_URL, path), shell=True).strip().decode('utf-8')
+
+
+def apteryx_prune(path):
+    assert subprocess.check_output("%s -r %s%s" % (APTERYX, APTERYX_URL, path), shell=True).strip().decode('utf-8') != "Failed"
+
+
+def apteryx_traverse(path):
+    return subprocess.check_output("%s -t %s%s" % (APTERYX, APTERYX_URL, path), shell=True).strip().decode('utf-8')
+
+
 @pytest.fixture(autouse=True)
 def run_around_tests():
     # Before test
     os.system("echo Before test")
     os.system("%s -r /test" % (APTERYX))
+    apteryx_prune("/test")
+    apteryx_prune("/t2:test")
     for path, value in db_default:
-        os.system("%s -s %s %s" % (APTERYX, path, value))
+        apteryx_set(path, value)
     yield
     # After test
     os.system("echo After test")
-    os.system("%s -r /test" % (APTERYX))
-    os.system("%s -r /t2:test" % (APTERYX))
+    apteryx_prune("/test")
+    apteryx_prune("/t2:test")
 
 
 def connect():

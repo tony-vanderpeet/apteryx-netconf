@@ -1,7 +1,7 @@
 import pytest
 from ncclient.xml_ import to_ele
 from lxml import etree
-from conftest import connect, _get_test_with_filter
+from conftest import connect, _get_test_with_filter, apteryx_set
 
 
 def test_get_subtree_no_filter():
@@ -346,6 +346,25 @@ def test_get_subtree_select_one_node():
         <animals>
             <animal>
                 <name>cat</name>
+                <type>big</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_select_one_with_colon():
+    apteryx_set("/test/animals/animal/cat:ty/name", "cat:ty")
+    apteryx_set("/test/animals/animal/cat:ty/type", "1")
+    select = '<test><animals><animal><name>cat:ty</name></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test>
+        <animals>
+            <animal>
+                <name>cat:ty</name>
                 <type>big</type>
             </animal>
         </animals>

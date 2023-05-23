@@ -84,6 +84,24 @@ def test_edit_config_list():
 """
     _edit_config_test(payload, post_xpath="/test/animals", inc_str=["frog"])
 
+
+def test_edit_config_list_key_colon():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>frog:y</name>
+            <type>little</type>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test/animals", inc_str=["frog:y"])
+
+
 # EDIT-CONFIG (operation="delete")
 
 
