@@ -83,10 +83,14 @@ static GOptionEntry entries[] = {
     {"debug", 'd', 0, G_OPTION_ARG_NONE, &apteryx_netconf_debug, "Debug", NULL},
     {"verbose", 'v', 0, G_OPTION_ARG_NONE, &apteryx_netconf_verbose, "Verbose", NULL},
     {"background", 'b', 0, G_OPTION_ARG_NONE, &background, "Background", NULL},
-    {"models", 'm', 0, G_OPTION_ARG_STRING, &models_path, "Path to models(defaults to \"./\")", NULL},
-    {"unix", 'u', 0, G_OPTION_ARG_STRING, &unix_path, "Listen on unix socket (defaults to /tmp/apteryx-netconf.sock)", NULL},
-    {"copy", 'c', 0, G_OPTION_ARG_STRING, &cp_cmd, "BASH command to run to copy running->startup", NULL},
-    {"remove", 'r', 0, G_OPTION_ARG_STRING, &rm_cmd, "BASH command to run to remove startup config", NULL},
+    {"models", 'm', 0, G_OPTION_ARG_STRING, &models_path,
+     "Path to models(defaults to \"./\")", NULL},
+    {"unix", 'u', 0, G_OPTION_ARG_STRING, &unix_path,
+     "Listen on unix socket (defaults to /tmp/apteryx-netconf.sock)", NULL},
+    {"copy", 'c', 0, G_OPTION_ARG_STRING, &cp_cmd,
+     "BASH command to run to copy running->startup", NULL},
+    {"remove", 'r', 0, G_OPTION_ARG_STRING, &rm_cmd,
+     "BASH command to run to remove startup config", NULL},
     {NULL}
 };
 

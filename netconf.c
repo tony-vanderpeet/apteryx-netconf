@@ -30,6 +30,12 @@ struct netconf_session
     uint32_t id;
 };
 
+static struct _running_ds_lock_t
+{
+    struct netconf_session nc_sess;
+    gboolean locked;
+} running_ds_lock;
+
 #define NETCONF_BASE_1_0_END "]]>]]>"
 #define NETCONF_BASE_1_1_END "\n##\n"
 
@@ -99,7 +105,8 @@ send_rpc_ok (struct netconf_session *session, xmlNode * rpc, bool closing)
 }
 
 static bool
-send_rpc_error (struct netconf_session *session, xmlNode * rpc, const char *error)
+send_rpc_error (struct netconf_session *session, xmlNode * rpc, const char *error,
+                const char *error_msg, xmlNode * error_info)
 {
     xmlDoc *doc;
     xmlNode *root, *child;
@@ -120,7 +127,21 @@ send_rpc_error (struct netconf_session *session, xmlNode * rpc, const char *erro
     xmlNewChild (child, NULL, BAD_CAST "nc:error-tag", BAD_CAST error);
     xmlNewChild (child, NULL, BAD_CAST "nc:error-type", BAD_CAST "rpc");
     xmlNewChild (child, NULL, BAD_CAST "nc:error-severity", BAD_CAST "error");
-    xmlNewChild (child, NULL, BAD_CAST "nc:error-info", BAD_CAST NULL);
+
+    if (error_msg != NULL)
+    {
+        xmlNewChild (child, NULL, BAD_CAST "nc:error-message", BAD_CAST error_msg);
+    }
+
+    if (error_info != NULL)
+    {
+        xmlAddChild (child, error_info);
+    }
+    else
+    {
+        xmlNewChild (child, NULL, BAD_CAST "nc:error-info", BAD_CAST NULL);
+    }
+
     xmlDocDumpMemoryEnc (doc, &xmlbuff, &len, "UTF-8");
     header = g_strdup_printf ("\n#%d\n", len);
 
@@ -212,7 +233,7 @@ send_rpc_data (struct netconf_session *session, xmlNode * rpc, xmlNode * data)
 }
 
 static void
-schema_set_model_information (xmlNode *cap)
+schema_set_model_information (xmlNode * cap)
 {
     xmlNode *xml_child;
     sch_loaded_model *loaded;
@@ -298,7 +319,8 @@ handle_hello (struct netconf_session *session)
     child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
     xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:xpath:1.0");
     child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
-    xmlNodeSetContent (child, BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
+    xmlNodeSetContent (child,
+                       BAD_CAST "urn:ietf:params:netconf:capability:writable-running:1.0");
     child = xmlNewChild (node, NULL, BAD_CAST "nc:capability", NULL);
     xmlNodeSetContent (child,
                        BAD_CAST "urn:ietf:params:netconf:capability:with-defaults:1.0");
@@ -333,7 +355,7 @@ handle_hello (struct netconf_session *session)
     return ret;
 }
 
-static GNode*
+static GNode *
 get_full_tree ()
 {
     GNode *tree = APTERYX_NODE (NULL, g_strdup_printf ("/"));
@@ -367,6 +389,9 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
     GNode *tree;
     xmlNode *xml = NULL;
     int schflags = 0;
+    char *msg = NULL;
+    char session_id_str[32];
+    xmlNode *error_info;
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
@@ -374,6 +399,19 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
     if (config_only)
     {
         schflags |= SCH_F_CONFIG;
+    }
+
+    /* Validate lock if configured on the running datastore */
+    if (running_ds_lock.locked == TRUE && (session->id != running_ds_lock.nc_sess.id))
+    {
+        /* A lock is already held by another NETCONF session, return lock-denied */
+        VERBOSE ("Lock failed, lock is already held\n");
+        error_info = xmlNewNode (NULL, BAD_CAST "nc:error-info");
+        snprintf (session_id_str, sizeof (session_id_str), "%u",
+                  running_ds_lock.nc_sess.id);
+        xmlNewChild (error_info, NULL, BAD_CAST "nc:session-id", BAD_CAST session_id_str);
+        msg = "Lock failed, lock is already held";
+        return send_rpc_error (session, rpc, "lock-denied", msg, error_info);
     }
 
     /* Parse options */
@@ -386,8 +424,8 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
                 g_strcmp0 ((char *) xmlFirstElementChild (node)->name, "running") != 0)
             {
                 VERBOSE ("Datastore \"%s\" not supported",
-                        (char *) xmlFirstElementChild (node)->name);
-                return send_rpc_error (session, rpc, "operation-not-supported");
+                         (char *) xmlFirstElementChild (node)->name);
+                return send_rpc_error (session, rpc, "operation-not-supported", NULL, NULL);
             }
         }
         /* Parse any filters */
@@ -401,39 +439,42 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
                 if (!attr)
                 {
                     VERBOSE ("XPATH filter missing select attribute");
-                    return send_rpc_error (session, rpc, "missing-attribute");
+                    return send_rpc_error (session, rpc, "missing-attribute", NULL, NULL);
                 }
                 VERBOSE ("FILTER: XPATH: %s\n", attr);
                 query = sch_path_to_query (g_schema, NULL, attr, schflags | SCH_F_XPATH);
                 if (!query)
                 {
                     VERBOSE ("XPATH: malformed filter\n");
-                    return send_rpc_error (session, rpc, "malformed-message");
+                    return send_rpc_error (session, rpc, "malformed-message", NULL, NULL);
                 }
             }
             else if (g_strcmp0 (attr, "subtree") == 0)
             {
-                if (!xmlFirstElementChild (node)) {
+                if (!xmlFirstElementChild (node))
+                {
                     VERBOSE ("SUBTREE: empty query\n");
                     free (attr);
                     return send_rpc_data (session, rpc, NULL);
                 }
-                parms = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY,
-                                          "none", false);
+                parms =
+                    sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node),
+                                      schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY, "none",
+                                      false);
                 query = sch_parm_tree (parms);
                 sch_parm_free (parms);
                 if (!query)
                 {
                     VERBOSE ("SUBTREE: malformed query\n");
                     free (attr);
-                    return send_rpc_error (session, rpc, "malformed-message");
+                    return send_rpc_error (session, rpc, "malformed-message", NULL, NULL);
                 }
             }
             else
             {
                 VERBOSE ("FILTER: unsupported/missing type (%s)\n", attr);
                 free (attr);
-                return send_rpc_error (session, rpc, "operation-not-supported");
+                return send_rpc_error (session, rpc, "operation-not-supported", NULL, NULL);
             }
             free (attr);
         }
@@ -502,6 +543,9 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     sch_xml_to_gnode_parms parms;
     int schflags = 0;
     GList *iter;
+    char *msg = NULL;
+    char session_id_str[32];
+    xmlNode *error_info;
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
@@ -513,23 +557,38 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     {
         VERBOSE ("Datastore \"%s\" not supported",
                  (char *) xmlFirstElementChild (node)->name);
-        return send_rpc_error (session, rpc, "operation-not-supported");
+        return send_rpc_error (session, rpc, "operation-not-supported", NULL, NULL);
     }
 
     //TODO Check default-operation
     //TODO Check test-option
     //TODO Check error-option
+    //
+    /* Validate lock if configured on the running datastore */
+    if (running_ds_lock.locked == TRUE && (session->id != running_ds_lock.nc_sess.id))
+    {
+        /* A lock is already held by another NETCONF session, return lock-denied */
+        VERBOSE ("Lock failed, lock is already held\n");
+        error_info = xmlNewNode (NULL, BAD_CAST "nc:error-info");
+        snprintf (session_id_str, sizeof (session_id_str), "%u",
+                  running_ds_lock.nc_sess.id);
+        xmlNewChild (error_info, NULL, BAD_CAST "nc:session-id", BAD_CAST session_id_str);
+        msg = "Lock failed, lock is already held";
+        return send_rpc_error (session, rpc, "lock-denied", msg, error_info);
+    }
 
     /* Find the config */
     node = xmlFindNodeByName (action, BAD_CAST "config");
     if (!node)
     {
         VERBOSE ("Missing \"config\" element");
-        return send_rpc_error (session, rpc, "missing-element");
+        return send_rpc_error (session, rpc, "missing-element", NULL, NULL);
     }
 
     /* Convert to gnode */
-    parms = sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, "merge", true);
+    parms =
+        sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, "merge",
+                          true);
     tree = sch_parm_tree (parms);
     error_tag = sch_parm_error_tag (parms);
 
@@ -538,7 +597,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         VERBOSE ("error parsing XML\n");
         sch_parm_free (parms);
         apteryx_free_tree (tree);
-        return send_rpc_error (session, rpc, error_tag);
+        return send_rpc_error (session, rpc, error_tag, NULL, NULL);
     }
 
     /* Check delete and create paths */
@@ -555,7 +614,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         VERBOSE ("error in delete or create paths\n");
         sch_parm_free (parms);
         apteryx_free_tree (tree);
-        return send_rpc_error (session, rpc, error_tag);
+        return send_rpc_error (session, rpc, error_tag, NULL, NULL);
     }
 
     /* Delete delete, remove and replace paths */
@@ -581,9 +640,104 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     if (tree && !apteryx_set_tree (tree))
     {
         apteryx_free_tree (tree);
-        return send_rpc_error (session, rpc, "operation-failed");
+        return send_rpc_error (session, rpc, "operation-failed", NULL, NULL);
     }
     apteryx_free_tree (tree);
+
+    /* Success */
+    return send_rpc_ok (session, rpc, false);
+}
+
+static void
+_set_lock (struct netconf_session *session)
+{
+    running_ds_lock.locked = TRUE;
+    running_ds_lock.nc_sess.id = session->id;
+    running_ds_lock.nc_sess.fd = session->fd;
+}
+
+static bool
+handle_lock (struct netconf_session *session, xmlNode * rpc)
+{
+    xmlNode *action = xmlFirstElementChild (rpc);
+    xmlNode *error_info, *node;
+    char *msg = NULL;
+    char session_id_str[32];
+
+    /* Check the target */
+    node = xmlFindNodeByName (action, BAD_CAST "target");
+    if (!node || !xmlFirstElementChild (node) ||
+        xmlStrcmp (xmlFirstElementChild (node)->name, BAD_CAST "running"))
+    {
+        VERBOSE ("Datastore \"%s\" not supported",
+                 (char *) xmlFirstElementChild (node)->name);
+        return send_rpc_error (session, rpc, "operation-not-supported", NULL, NULL);
+    }
+
+    /* Attempt to acquire lock */
+    if (running_ds_lock.locked == FALSE)
+    {
+        /* Acquire lock on the running datastore */
+        _set_lock (session);
+    }
+    else
+    {
+        /* Return lock-denied */
+        VERBOSE ("Lock failed, lock is already held\n");
+        error_info = xmlNewNode (NULL, BAD_CAST "nc:error-info");
+        snprintf (session_id_str, sizeof (session_id_str), "%u",
+                  running_ds_lock.nc_sess.id);
+        xmlNewChild (error_info, NULL, BAD_CAST "nc:session-id", BAD_CAST session_id_str);
+        msg = "Lock failed, lock is already held";
+        return send_rpc_error (session, rpc, "lock-denied", msg, error_info);
+    }
+
+    /* Success */
+    return send_rpc_ok (session, rpc, false);
+}
+
+static void
+_reset_lock (void)
+{
+    running_ds_lock.locked = FALSE;
+    running_ds_lock.nc_sess.id = 0;
+    running_ds_lock.nc_sess.fd = -1;
+}
+
+static bool
+handle_unlock (struct netconf_session *session, xmlNode * rpc)
+{
+    xmlNode *action = xmlFirstElementChild (rpc);
+    xmlNode *error_info, *node;
+    char *msg = NULL;
+    char session_id_str[32];
+
+    /* Check the target */
+    node = xmlFindNodeByName (action, BAD_CAST "target");
+    if (!node || !xmlFirstElementChild (node) ||
+        xmlStrcmp (xmlFirstElementChild (node)->name, BAD_CAST "running"))
+    {
+        VERBOSE ("Datastore \"%s\" not supported",
+                 (char *) xmlFirstElementChild (node)->name);
+        return send_rpc_error (session, rpc, "operation-not-supported", NULL, NULL);
+    }
+
+    /* Check unlock operation validity */
+    if ((running_ds_lock.locked != TRUE) ||
+        ((running_ds_lock.locked == TRUE) && (session->id != running_ds_lock.nc_sess.id)))
+    {
+        /* Lock held by another session */
+        VERBOSE ("Unlock failed, session does not own lock on the datastore\n");
+        error_info = xmlNewNode (NULL, BAD_CAST "nc:error-info");
+        snprintf (session_id_str, sizeof (session_id_str), "%u",
+                  running_ds_lock.nc_sess.id);
+        xmlNewChild (error_info, NULL, BAD_CAST "nc:session-id", BAD_CAST session_id_str);
+        msg = "Unlock failed, session does not own lock on the datastore";
+        return send_rpc_error (session, rpc, "operation-failed", msg, error_info);
+    }
+
+    /* Unlock running datastore */
+    _reset_lock ();
 
     /* Success */
     return send_rpc_ok (session, rpc, false);
@@ -608,6 +762,7 @@ static void
 destroy_session (struct netconf_session *session)
 {
     close (session->fd);
+    _reset_lock ();
     g_free (session);
 }
 
@@ -766,10 +921,20 @@ netconf_handle_session (int fd)
             VERBOSE ("Handle RPC %s\n", (char *) child->name);
             handle_edit (session, rpc);
         }
+        else if (g_strcmp0 ((char *) child->name, "lock") == 0)
+        {
+            VERBOSE ("Handle RPC %s\n", (char *) child->name);
+            handle_lock (session, rpc);
+        }
+        else if (g_strcmp0 ((char *) child->name, "unlock") == 0)
+        {
+            VERBOSE ("Handle RPC %s\n", (char *) child->name);
+            handle_unlock (session, rpc);
+        }
         else
         {
             VERBOSE ("Unknown RPC (%s)\n", child->name);
-            send_rpc_error (session, rpc, "operation-not-supported");
+            send_rpc_error (session, rpc, "operation-not-supported", NULL, NULL);
             xmlFreeDoc (doc);
             g_free (message);
             break;
@@ -797,6 +962,9 @@ netconf_init (const char *path, const char *cp, const char *rm)
     /* Create a random starting session ID */
     srand (time (NULL));
     netconf_session_id = rand () % 32768;
+
+    /* Initialise lock */
+    _reset_lock ();
 
     return true;
 }
