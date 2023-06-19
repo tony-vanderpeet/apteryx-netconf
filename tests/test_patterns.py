@@ -43,7 +43,7 @@ def test_pattern_debug():
     _pattern_test(payload, tm)
 
 
-def test_pattern_priority():
+def test_range_priority():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -54,7 +54,39 @@ def test_pattern_priority():
   </test>
 </config>
 """
-    tm = (("1", True), ("0", False), ("11", False), ("^1$", False))
+    tm = (("1", True), ("-1", True), ("99", True), ("0", False), ("11", False), ("-11", False), ("18446744073709551615", False), ("-9223372036854775808", False), ("^1$", False))
+    _pattern_test(payload, tm)
+
+
+def test_range_volume():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <volume>{pval}</volume>
+    </settings>
+  </test>
+</config>
+"""
+    # uint64 range="0..18446744073709551615"
+    tm = (("-1", False), ("0", True), ("18446744073709551615", True), ("28446744073709551615", False))
+    _pattern_test(payload, tm)
+
+
+def test_range_speed():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing-2">
+    <settings>
+      <speed xmlns="http://test.com/ns/yang/testing2-augmented">{pval}</speed>
+    </settings>
+  </test>
+</config>
+"""
+    # int64 range="-9223372036854775808..9223372036854775807"
+    tm = (("-18446744073709551615", False), ("-9223372036854775808", True), ("0", True), ("9223372036854775807", True), ("18446744073709551615", False))
     _pattern_test(payload, tm)
 
 
