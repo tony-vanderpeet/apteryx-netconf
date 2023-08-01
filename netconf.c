@@ -31,6 +31,9 @@ struct netconf_session
     int fd;
     uint32_t id;
     char *username;
+    gchar *rem_addr;
+    gchar *rem_port;
+    gchar *login_time;
     bool running;
 };
 
@@ -47,10 +50,13 @@ static struct _running_ds_lock_t
 #define HELLO_RX_SIZE 1024
 #define MAX_HELLO_RX_SIZE 16384
 
+#define NETCONF_STATE_SESSIONS_PATH "/netconf-state/sessions/session"
+
 static uint32_t netconf_session_id = 1;
 
 /* Maintain a list of open sessions */
-static GSList *open_sessions_list = NULL;
+static GList *open_sessions_list = NULL;
+GMutex session_lock;
 
 #define ERR_MSG_NOT_SUPPORTED 0
 #define ERR_MSG_MISSING_ATTRIB 1
@@ -68,11 +74,10 @@ netconf_close_open_sessions (void)
 {
     if (open_sessions_list)
     {
-        for (guint i = 0; i < g_slist_length (open_sessions_list); i++)
+        for (GList *iter = open_sessions_list; iter; iter = g_list_next (iter))
         {
-            struct netconf_session *nc_session =
-                (struct netconf_session *) g_slist_nth_data (open_sessions_list, i);
-            if (nc_session->fd >= 0)
+            struct netconf_session *nc_session = iter->data;
+            if (nc_session && nc_session->fd >= 0)
             {
                 close (nc_session->fd);
                 nc_session->fd = -1;
@@ -81,7 +86,10 @@ netconf_close_open_sessions (void)
     }
 }
 
-/* Remove specified netconf session from open_sessions_list */
+/**
+ * Remove specified netconf session from open_sessions_list. Can't guarantee
+ * that the passed in session is the one on the list, hence the search by ID.
+ */
 static void
 remove_netconf_session (struct netconf_session *session)
 {
@@ -90,34 +98,37 @@ remove_netconf_session (struct netconf_session *session)
         return;
     }
 
-    for (guint i = 0; i < g_slist_length (open_sessions_list); i++)
+    g_mutex_lock (&session_lock);
+    for (GList *iter = open_sessions_list; iter; iter = g_list_next (iter))
     {
-        struct netconf_session *nc_session =
-            (struct netconf_session *) g_slist_nth_data (open_sessions_list, i);
-        if (session->id == nc_session->id)
+        struct netconf_session *nc_session = iter->data;
+        if (nc_session && session->id == nc_session->id)
         {
-            open_sessions_list = g_slist_remove (open_sessions_list, nc_session);
+            open_sessions_list = g_list_remove (open_sessions_list, nc_session);
             break;
         }
     }
+    g_mutex_unlock (&session_lock);
 }
 
 /* Find open netconf session details by ID */
 static struct netconf_session *
 find_netconf_session_by_id (uint32_t session_id)
 {
-
-    for (guint i = 0; i < g_slist_length (open_sessions_list); i++)
+    struct netconf_session *ret = NULL;
+    g_mutex_lock (&session_lock);
+    for (GList *iter = open_sessions_list; iter; iter = g_list_next (iter))
     {
-        struct netconf_session *nc_session =
-            (struct netconf_session *) g_slist_nth_data (open_sessions_list, i);
-        if (session_id == nc_session->id)
+        struct netconf_session *nc_session = iter->data;
+        if (nc_session && session_id == nc_session->id)
         {
-            return nc_session;
+            ret = nc_session;
+            break;
         }
     }
+    g_mutex_unlock (&session_lock);
 
-    return NULL;
+    return ret;
 }
 
 static xmlDoc*
@@ -1245,14 +1256,119 @@ handle_kill_session (struct netconf_session *session, xmlNode * rpc)
     return send_rpc_ok (session, rpc, false);
 }
 
+/**
+ * Add session data for this session based on the PID of the remote socat process.
+ */
+static void
+add_session_data (struct netconf_session *session, uint32_t pid)
+{
+    gchar *fname;
+    gchar *contents;
+    gchar *one_env;
+    gsize length;
+    gsize length_left;
+    gsize env_len;
+    gchar **env_split;
+    GDateTime *now = NULL;
+
+    /* Get initial environment of remote process. */
+    fname = g_strdup_printf ("/proc/%d/environ", pid);
+    if (!g_file_get_contents (fname, &contents, &length, NULL))
+    {
+        g_free (fname);
+        return;
+    }
+    g_free (fname);
+
+    /* Read each null-terminated string in contents */
+    one_env = contents;
+    length_left = length;
+    while (length_left > 0 && one_env[0] != '\0')
+    {
+        if (g_str_has_prefix (one_env, "SSH_CLIENT"))
+        {
+            env_split = g_strsplit_set (one_env, "= ", 4);
+            if (env_split[0] == NULL || env_split[1] == NULL || env_split[2] == NULL ||
+                env_split[3] == NULL || env_split[4] != NULL)
+            {
+                g_strfreev (env_split);
+                goto cleanup;
+            }
+            session->rem_addr = g_strdup (env_split[1]);
+            session->rem_port = g_strdup (env_split[2]);
+            g_strfreev (env_split);
+            break;
+        }
+        env_len = strlen (one_env);
+        length_left -= env_len + 1;
+        one_env += env_len + 1;
+    }
+
+    if (session->rem_addr)
+    {
+        /* Get local time */
+        now = g_date_time_new_now_utc ();
+        session->login_time = g_date_time_format (now, "%Y-%m-%dT%H:%M:%S.%fZ%:z");
+        g_date_time_unref (now);
+    }
+
+cleanup:
+    g_free (contents);
+}
+
+/**
+ * Refresh function for /netconf-state/sessions/session/<*>
+ */
+static uint64_t
+_netconf_sessions_refresh (const char *path)
+{
+    GNode *root;
+    GNode *sess;
+    gboolean done_one = false;
+    gchar *sess_id;
+    struct netconf_session *nc_session;
+
+    root = APTERYX_NODE (NULL, g_strdup (NETCONF_STATE_SESSIONS_PATH));
+    g_mutex_lock (&session_lock);
+    for (GList *iter = open_sessions_list; iter; iter = g_list_next (iter))
+    {
+        nc_session = iter->data;
+        if (!nc_session)
+        {
+            continue;
+        }
+
+        /* Create Apteryx sub-tree */
+        sess_id = g_strdup_printf ("%d", nc_session->id);
+        sess = APTERYX_NODE (root, g_strdup (sess_id));
+        APTERYX_LEAF (sess, g_strdup ("session-id"), g_strdup (sess_id));
+        APTERYX_LEAF (sess, g_strdup ("transport"), g_strdup ("netconf-ssh"));
+        APTERYX_LEAF (sess, g_strdup ("username"), g_strdup (nc_session->username));
+        APTERYX_LEAF (sess, g_strdup ("login-time"), g_strdup (nc_session->login_time));
+        APTERYX_LEAF (sess, g_strdup ("source-host"), g_strdup (nc_session->rem_addr));
+        APTERYX_LEAF (sess, g_strdup ("source-port"), g_strdup (nc_session->rem_port));
+        g_free (sess_id);
+        done_one = true;
+    }
+    g_mutex_unlock (&session_lock);
+    apteryx_prune (NETCONF_STATE_SESSIONS_PATH);
+    if (done_one)
+    {
+        apteryx_set_tree (root);
+    }
+    apteryx_free_tree (root);
+    return 1000 * 1000;
+}
 
 static struct netconf_session *
 create_session (int fd)
 {
-    struct netconf_session *session = g_malloc (sizeof (struct netconf_session));
+    struct netconf_session *session = g_malloc0 (sizeof (struct netconf_session));
     session->fd = fd;
-    session->id = netconf_session_id++;
     session->running = g_main_loop_is_running (g_loop);
+
+    g_mutex_lock (&session_lock);
+    session->id = netconf_session_id++;
 
     /* If the counter rounds, then the value 0 is not allowed */
     if (!session->id)
@@ -1261,7 +1377,8 @@ create_session (int fd)
     }
 
     /* Append to open sessions list */
-    open_sessions_list = g_slist_append (open_sessions_list, session);
+    open_sessions_list = g_list_append (open_sessions_list, session);
+    g_mutex_unlock (&session_lock);
 
     return session;
 }
@@ -1282,8 +1399,10 @@ destroy_session (struct netconf_session *session)
 
     remove_netconf_session (session);
 
-    if (session->username)
-        g_free (session->username);
+    g_free (session->username);
+    g_free (session->rem_addr);
+    g_free (session->rem_port);
+    g_free (session->login_time);
 
     g_free (session);
 }
@@ -1395,6 +1514,7 @@ netconf_handle_session (int fd)
         {
             session->username = g_strdup(pw->pw_name);
         }
+        add_session_data (session, ucred.pid);
     }
 
     /* Send our hello - RFC 6241 section 8.1 last paragraph */
@@ -1533,6 +1653,9 @@ netconf_init (const char *path, const char *supported, const char *logging,
 
     /* Initialise lock */
     reset_lock ();
+
+    /* Set up Apteryx refresh on session information */
+    apteryx_refresh (NETCONF_STATE_SESSIONS_PATH "/*", _netconf_sessions_refresh);
 
     return true;
 }
