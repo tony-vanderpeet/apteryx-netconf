@@ -1308,7 +1308,7 @@ add_session_data (struct netconf_session *session, uint32_t pid)
     {
         /* Get local time */
         now = g_date_time_new_now_utc ();
-        session->login_time = g_date_time_format (now, "%Y-%m-%dT%H:%M:%S.%fZ%:z");
+        session->login_time = g_date_time_format (now, "%Y-%m-%dT%H:%M:%SZ%:z");
         g_date_time_unref (now);
     }
 
@@ -1327,6 +1327,8 @@ _netconf_sessions_refresh (const char *path)
     gboolean done_one = false;
     gchar *sess_id;
     struct netconf_session *nc_session;
+    gboolean has_lock;
+    gchar *lock_str;
 
     root = APTERYX_NODE (NULL, g_strdup (NETCONF_STATE_SESSIONS_PATH));
     g_mutex_lock (&session_lock);
@@ -1338,6 +1340,10 @@ _netconf_sessions_refresh (const char *path)
             continue;
         }
 
+        /* Get lock value for session */
+        has_lock = running_ds_lock.locked && nc_session->id == running_ds_lock.nc_sess.id;
+        lock_str = has_lock ? "R" : "-";
+
         /* Create Apteryx sub-tree */
         sess_id = g_strdup_printf ("%d", nc_session->id);
         sess = APTERYX_NODE (root, g_strdup (sess_id));
@@ -1347,6 +1353,7 @@ _netconf_sessions_refresh (const char *path)
         APTERYX_LEAF (sess, g_strdup ("login-time"), g_strdup (nc_session->login_time));
         APTERYX_LEAF (sess, g_strdup ("source-host"), g_strdup (nc_session->rem_addr));
         APTERYX_LEAF (sess, g_strdup ("source-port"), g_strdup (nc_session->rem_port));
+        APTERYX_LEAF (sess, g_strdup ("lock"), lock_str);
         g_free (sess_id);
         done_one = true;
     }
