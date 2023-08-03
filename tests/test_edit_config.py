@@ -431,3 +431,49 @@ def test_edit_config_remove_missing_data():
 </config>
 """
     _edit_config_test(payload, expect_err="malformed-message")
+
+
+# Empty value for nodes that have a non-empty pattern or values
+
+def test_edit_config_invalid_empty_merge():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <debug></debug>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err="bad-attribute")
+
+
+def test_edit_config_invalid_empty_replace():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <debug xc:operation="replace"></debug>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err="bad-attribute")
+
+
+def test_edit_config_empty_delete():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <enable xc:operation="delete"></enable>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/enable')
+    print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    assert etree.XPath("//text()")(xml) == []
