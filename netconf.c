@@ -51,6 +51,7 @@ static struct _running_ds_lock_t
 #define MAX_HELLO_RX_SIZE 16384
 
 #define NETCONF_STATE_SESSIONS_PATH "/netconf-state/sessions/session"
+#define NETCONF_SESSION_STATUS "/netconf-state/sessions/session/*/status"
 
 static uint32_t netconf_session_id = 1;
 
@@ -1367,6 +1368,34 @@ _netconf_sessions_refresh (const char *path)
     return 1000 * 1000;
 }
 
+static bool
+_netconf_clear_session (const char *path, const char *value)
+{
+    uint32_t id;
+    struct netconf_session *clear_session;
+    gchar **path_split;
+
+    if (g_strcmp0 (value, "clear") == 0)
+    {
+        path_split = g_strsplit (path, "/", 5);
+        if (path_split[4] != NULL)
+        {
+            id = (uint32_t) g_ascii_strtoull (path_split[4], NULL, 10);
+            clear_session = find_netconf_session_by_id (id);
+            if (clear_session == NULL)
+            {
+                apteryx_set (path, "Session not found");
+            }
+            else
+            {
+                shutdown (clear_session->fd, SHUT_RDWR);
+            }
+        }
+        g_strfreev (path_split);
+    }
+    return true;
+}
+
 static struct netconf_session *
 create_session (int fd)
 {
@@ -1663,6 +1692,7 @@ netconf_init (const char *path, const char *supported, const char *logging,
 
     /* Set up Apteryx refresh on session information */
     apteryx_refresh (NETCONF_STATE_SESSIONS_PATH "/*", _netconf_sessions_refresh);
+    apteryx_watch (NETCONF_SESSION_STATUS, _netconf_clear_session);
 
     return true;
 }
