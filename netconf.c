@@ -1355,6 +1355,7 @@ _netconf_sessions_refresh (const char *path)
         APTERYX_LEAF (sess, g_strdup ("source-host"), g_strdup (nc_session->rem_addr));
         APTERYX_LEAF (sess, g_strdup ("source-port"), g_strdup (nc_session->rem_port));
         APTERYX_LEAF (sess, g_strdup ("lock"), g_strdup (lock_str));
+        APTERYX_LEAF (sess, g_strdup ("status"), g_strdup ("active"));
         g_free (sess_id);
         done_one = true;
     }
@@ -1375,7 +1376,7 @@ _netconf_clear_session (const char *path, const char *value)
     struct netconf_session *clear_session;
     gchar **path_split;
 
-    if (g_strcmp0 (value, "clear") == 0)
+    if (g_strcmp0 (value, "inactive") == 0)
     {
         path_split = g_strsplit (path, "/", 5);
         if (path_split[4] != NULL)
@@ -1384,7 +1385,7 @@ _netconf_clear_session (const char *path, const char *value)
             clear_session = find_netconf_session_by_id (id);
             if (clear_session == NULL)
             {
-                apteryx_set (path, "Session not found");
+                apteryx_set (path, "unknown");
             }
             else
             {
