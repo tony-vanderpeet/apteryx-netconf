@@ -477,15 +477,14 @@ send_rpc_error_full (struct netconf_session *session, xmlNode *rpc, NC_ERR_TAG e
 {
     nc_error_parms error_parms = NC_ERROR_PARMS_INIT;
     bool ret = false;
-    GString *session_id_str = g_string_new (NULL);
 
     error_parms.tag = err_tag;
     error_parms.type = err_type;
     if (!bad_elem && !no_info)
     {
-        GString *session_id_str = g_string_new (NULL);
-        g_string_printf (session_id_str, "%u", running_ds_lock.nc_sess.id);
-        g_hash_table_insert (error_parms.info, "session-id", session_id_str->str);
+        gchar *sess_id_str = g_strdup_printf ("%u", running_ds_lock.nc_sess.id);
+        g_hash_table_insert (error_parms.info, "session-id", sess_id_str);
+        /* No need to free, hash table cleanup will do that */
     }
     if (error_msg)
     {
@@ -494,14 +493,15 @@ send_rpc_error_full (struct netconf_session *session, xmlNode *rpc, NC_ERR_TAG e
     }
     if (bad_elem)
     {
-        g_hash_table_insert (error_parms.info, "bad_element", bad_elem);
+        g_hash_table_insert (error_parms.info, "bad_element", g_strdup (bad_elem));
+        /* No need to free, hash table cleanup will do that */
     }
     if (bad_attr)
     {
-        g_hash_table_insert (error_parms.info, "bad-attribute", bad_attr);
+        g_hash_table_insert (error_parms.info, "bad-attribute", g_strdup (bad_attr));
+        /* No need to free, hash table cleanup will do that */
     }
     ret = _send_rpc_error (session, rpc, error_parms);
-    g_string_free (session_id_str, FALSE);
     _free_error_parms (error_parms);
     return ret;
 }
