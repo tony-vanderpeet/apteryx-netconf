@@ -15,7 +15,7 @@ def _error_check(err, expect_err):
         assert err.message == expect_err["message"]
 
 
-def _edit_config_test(payload, expect_err=None, post_xpath=None, inc_str=[], exc_str=[]):
+def _edit_config_test(payload, expect_err=None, post_xpath=None, targ="running", inc_str=[], exc_str=[]):
     """
     Run an edit-config with the given payload, optionally checking for error, and
     strings that should be included or excluded in the response,
@@ -24,7 +24,7 @@ def _edit_config_test(payload, expect_err=None, post_xpath=None, inc_str=[], exc
     m = connect()
     xml = None
     try:
-        response = m.edit_config(target='running', config=payload)
+        response = m.edit_config(target=targ, config=payload)
         print(response)
     except RPCError as err:
         print(err)
@@ -58,6 +58,21 @@ def test_edit_config_node():
 """
     xml = _edit_config_test(payload, post_xpath='/test/settings/priority')
     assert xml.find('./{*}test/{*}settings/{*}priority').text == '5'
+
+
+def test_edit_config_bad_target():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+        <priority>5</priority>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/priority', targ="candidate",
+                            expect_err={"tag": "operation-not-supported", "type": "protocol"})
 
 
 def test_edit_config_multi():
