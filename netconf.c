@@ -37,6 +37,7 @@ struct netconf_session
     gchar *rem_port;
     gchar *login_time;
     bool running;
+    session_counters_t counters;
 };
 
 static struct _running_ds_lock_t
@@ -53,6 +54,7 @@ static struct _running_ds_lock_t
 #define MAX_HELLO_RX_SIZE 16384
 
 #define NETCONF_STATE_SESSIONS_PATH "/netconf-state/sessions/session"
+#define NETCONF_STATE_STATISTICS_PATH "/netconf-state/statistics"
 #define NETCONF_SESSION_STATUS "/netconf-state/sessions/session/*/status"
 #define NETCONF_CONFIG_MAX_SESSIONS "/netconf/config/max-sessions"
 #define NETCONF_STATE "/netconf/state"
@@ -69,6 +71,9 @@ static uint32_t netconf_num_sessions = 0;
 /* Maintain a list of open sessions */
 static GList *open_sessions_list = NULL;
 GMutex session_lock;
+
+/* Global statistics */
+global_statistics_t netconf_global_stats;
 
 static void
 _set_xmlns (xmlNode* node)
@@ -454,6 +459,8 @@ _send_rpc_error (struct netconf_session *session, xmlNode * rpc, nc_error_parms 
         goto cleanup;
     }
     VERBOSE ("TX(%ld):\n%s\n", strlen (NETCONF_BASE_1_1_END), NETCONF_BASE_1_1_END);
+    session->counters.out_rpc_errors++;
+    netconf_global_stats.session_totals.out_rpc_errors++;
 
   cleanup:
     g_free (header);
@@ -1023,6 +1030,8 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                                                 "XPATH: malformed filter", NULL, NULL, true);
                     free (attr);
                     g_strfreev(split);
+                    session->counters.in_bad_rpcs++;
+                    netconf_global_stats.session_totals.in_bad_rpcs++;
                     return -1;
                 }
 
@@ -1069,6 +1078,8 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     *ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_MALFORMED_MSG, NC_ERR_TYPE_RPC,
                                                 "SUBTREE: malformed query", NULL, NULL, true);
                     free (attr);
+                    session->counters.in_bad_rpcs++;
+                    netconf_global_stats.session_totals.in_bad_rpcs++;
                     return -1;
                 }
 
@@ -1186,6 +1197,8 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
 
     /* Send response */
     send_rpc_data (session, rpc, xml_list);
+    session->counters.in_rpcs++;
+    netconf_global_stats.session_totals.in_rpcs++;
 
     return true;
 }
@@ -1290,6 +1303,11 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     if (error_parms.tag != 0)
     {
         VERBOSE ("error parsing XML\n");
+        if (error_parms.type == NC_ERR_TYPE_RPC)
+        {
+            session->counters.in_bad_rpcs++;
+            netconf_global_stats.session_totals.in_bad_rpcs++;
+        }
         ret = _send_rpc_error (session, rpc, error_parms);
         sch_parm_free (parms);
         apteryx_free_tree (tree);
@@ -1348,6 +1366,8 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     apteryx_free_tree (tree);
 
     /* Success */
+    session->counters.in_rpcs++;
+    netconf_global_stats.session_totals.in_rpcs++;
     return send_rpc_ok (session, rpc, false);
 }
 
@@ -1401,6 +1421,8 @@ handle_lock (struct netconf_session *session, xmlNode * rpc)
         NOTICE ("LOCK: user:%s session-id:%d\n", session->username, session->id);
 
     /* Success */
+    session->counters.in_rpcs++;
+    netconf_global_stats.session_totals.in_rpcs++;
     return send_rpc_ok (session, rpc, false);
 }
 
@@ -1462,6 +1484,8 @@ handle_unlock (struct netconf_session *session, xmlNode * rpc)
         NOTICE ("UNLOCK: user:%s session-id:%d\n", session->username, session->id);
 
     /* Success */
+    session->counters.in_rpcs++;
+    netconf_global_stats.session_totals.in_rpcs++;
     return send_rpc_ok (session, rpc, false);
 }
 
@@ -1530,6 +1554,8 @@ handle_kill_session (struct netconf_session *session, xmlNode * rpc)
      **/
 
     /* Success */
+    session->counters.in_rpcs++;
+    netconf_global_stats.session_totals.in_rpcs++;
     return send_rpc_ok (session, rpc, false);
 }
 
@@ -1632,6 +1658,14 @@ _netconf_sessions_refresh (const char *path)
         APTERYX_LEAF (sess, g_strdup ("source-port"), g_strdup (nc_session->rem_port));
         APTERYX_LEAF (sess, g_strdup ("lock"), g_strdup (lock_str));
         APTERYX_LEAF (sess, g_strdup ("status"), g_strdup ("active"));
+        APTERYX_LEAF (sess, g_strdup ("in-rpcs"),
+                      g_strdup_printf ("%d", nc_session->counters.in_rpcs));
+        APTERYX_LEAF (sess, g_strdup ("in-bad-rpcs"),
+                      g_strdup_printf ("%d", nc_session->counters.in_bad_rpcs));
+        APTERYX_LEAF (sess, g_strdup ("out-rpc_errors"),
+                      g_strdup_printf ("%d", nc_session->counters.out_rpc_errors));
+        APTERYX_LEAF (sess, g_strdup ("out-notifications"),
+                      g_strdup_printf ("%d", nc_session->counters.out_notifications));
         g_free (sess_id);
         done_one = true;
     }
@@ -1641,6 +1675,38 @@ _netconf_sessions_refresh (const char *path)
     {
         apteryx_set_tree (root);
     }
+    apteryx_free_tree (root);
+    return 1000 * 1000;
+}
+
+/**
+ * Refresh function for /netconf-state/statistics
+ */
+static uint64_t
+_netconf_statistics_refresh (const char *path)
+{
+    GNode *root;
+
+    root = APTERYX_NODE (NULL, g_strdup (NETCONF_STATE_STATISTICS_PATH));
+    APTERYX_LEAF (root, g_strdup ("netconf-start-time"),
+                  g_strdup (netconf_global_stats.netconf_start_time));
+    APTERYX_LEAF (root, g_strdup ("in-bad-hellos"),
+                  g_strdup_printf ("%d", netconf_global_stats.in_bad_hellos));
+    APTERYX_LEAF (root, g_strdup ("in-sessions"),
+                  g_strdup_printf ("%d", netconf_global_stats.in_sessions));
+    APTERYX_LEAF (root, g_strdup ("dropped-sessions"),
+                  g_strdup_printf ("%d", netconf_global_stats.dropped_sessions));
+    APTERYX_LEAF (root, g_strdup ("in-rpcs"),
+                  g_strdup_printf ("%d", netconf_global_stats.session_totals.in_rpcs));
+    APTERYX_LEAF (root, g_strdup ("in-bad-rpcs"),
+                  g_strdup_printf ("%d", netconf_global_stats.session_totals.in_bad_rpcs));
+    APTERYX_LEAF (root, g_strdup ("out-rpc_errors"),
+                  g_strdup_printf ("%d", netconf_global_stats.session_totals.out_rpc_errors));
+    APTERYX_LEAF (root, g_strdup ("out-notifications"),
+                  g_strdup_printf ("%d", netconf_global_stats.session_totals.out_notifications));
+
+    apteryx_prune (NETCONF_STATE_STATISTICS_PATH);
+    apteryx_set_tree (root);
     apteryx_free_tree (root);
     return 1000 * 1000;
 }
@@ -1721,6 +1787,7 @@ create_session (int fd)
     /* Append to open sessions list */
     open_sessions_list = g_list_append (open_sessions_list, session);
     netconf_num_sessions++;
+    netconf_global_stats.in_sessions++;
     g_mutex_unlock (&session_lock);
 
     return session;
@@ -1845,6 +1912,7 @@ netconf_handle_session (int fd)
 
     if (!session->running || netconf_num_sessions > netconf_max_sessions)
     {
+        netconf_global_stats.dropped_sessions++;
         destroy_session (session);
         return NULL;
     }
@@ -1864,6 +1932,7 @@ netconf_handle_session (int fd)
     session->running = g_main_loop_is_running (g_loop);
     if (!session->running || !send_hello (session))
     {
+        netconf_global_stats.dropped_sessions++;
         destroy_session (session);
         return NULL;
     }
@@ -1872,6 +1941,7 @@ netconf_handle_session (int fd)
     session->running = g_main_loop_is_running (g_loop);
     if (!session->running || !handle_hello (session))
     {
+        netconf_global_stats.in_bad_hellos++;
         destroy_session (session);
         return NULL;
     }
@@ -1888,6 +1958,7 @@ netconf_handle_session (int fd)
         message = receive_message (session, &len);
         if (!session->running || !message)
         {
+            netconf_global_stats.dropped_sessions++;
             break;
         }
 
@@ -1897,6 +1968,7 @@ netconf_handle_session (int fd)
         {
             ERROR ("XML: Invalid Netconf message\n");
             g_free (message);
+            netconf_global_stats.dropped_sessions++;
             break;
         }
         rpc = xmlDocGetRootElement (doc);
@@ -1905,6 +1977,7 @@ netconf_handle_session (int fd)
             ERROR ("XML: No root RPC element\n");
             xmlFreeDoc (doc);
             g_free (message);
+            netconf_global_stats.dropped_sessions++;
             break;
         }
 
@@ -1915,6 +1988,7 @@ netconf_handle_session (int fd)
             ERROR ("XML: No RPC child element\n");
             xmlFreeDoc (doc);
             g_free (message);
+            netconf_global_stats.dropped_sessions++;
             break;
         }
 
@@ -1926,6 +2000,7 @@ netconf_handle_session (int fd)
                                  "rpc", "message-id", false);
             xmlFreeDoc (doc);
             g_free (message);
+            netconf_global_stats.dropped_sessions++;
             break;
         }
 
@@ -1935,6 +2010,8 @@ netconf_handle_session (int fd)
             send_rpc_ok (session, rpc, true);
             xmlFreeDoc (doc);
             g_free (message);
+            session->counters.in_rpcs++;
+            netconf_global_stats.session_totals.in_rpcs++;
             break;
         }
         else if (g_strcmp0 ((char *) child->name, "kill-session") == 0)
@@ -1976,6 +2053,7 @@ netconf_handle_session (int fd)
             g_free (error_msg);
             xmlFreeDoc (doc);
             g_free (message);
+            netconf_global_stats.dropped_sessions++;
             break;
         }
 
@@ -2013,6 +2091,7 @@ netconf_init (const char *path, const char *supported, const char *logging,
 
     /* Set up Apteryx refresh on session information */
     apteryx_refresh (NETCONF_STATE_SESSIONS_PATH "/*", _netconf_sessions_refresh);
+    apteryx_refresh (NETCONF_STATE_STATISTICS_PATH "/*", _netconf_statistics_refresh);
     apteryx_watch (NETCONF_SESSION_STATUS, _netconf_clear_session);
     apteryx_watch (NETCONF_CONFIG_MAX_SESSIONS, _netconf_max_sessions);
     apteryx_set_int (NETCONF_STATE, "max-sessions", netconf_max_sessions);

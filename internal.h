@@ -65,6 +65,27 @@ typedef enum
     LOG_UNLOCK                  = (1 << 5),  /* Log unlock requests */
 } logging_flags;
 
+/* Define session counters from the RFC 6022 /netconf-state/sessions group
+ * An instance of these is also used for global counters
+ */
+typedef struct
+{
+    uint32_t in_rpcs;
+    uint32_t in_bad_rpcs;
+    uint32_t out_rpc_errors;
+    uint32_t out_notifications;
+} session_counters_t;
+
+/* Define global counters from the RFC 6022 /netconf-state/statistics group */
+typedef struct
+{
+    gchar *netconf_start_time;
+    uint32_t in_bad_hellos;
+    uint32_t in_sessions;
+    uint32_t dropped_sessions;
+    session_counters_t session_totals;
+} global_statistics_t;
+
 /* Main loop */
 extern GMainLoop *g_loop;
 
