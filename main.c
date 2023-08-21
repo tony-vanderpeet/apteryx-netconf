@@ -37,6 +37,8 @@ GMainLoop *g_loop = NULL;
 static int accept_fd = -1;
 static GThreadPool *workers = NULL;
 
+extern global_statistics_t netconf_global_stats;
+
 static gboolean
 termination_handler (gpointer arg1)
 {
@@ -111,6 +113,7 @@ main (int argc, char *argv[])
 {
     GError *error = NULL;
     GOptionContext *context;
+    GDateTime *now = NULL;
 
     /* Parse options */
     context = g_option_context_new ("- Netconf access to Apteryx");
@@ -138,6 +141,11 @@ main (int argc, char *argv[])
 
     /* Listen Socket */
     g_thread = g_thread_new ("netconf-accept", netconf_accept_thread, (gpointer) unix_path);
+
+    /* Record start time */
+    now = g_date_time_new_now_utc ();
+    netconf_global_stats.netconf_start_time = g_date_time_format (now, "%Y-%m-%dT%H:%M:%SZ%:z");
+    g_date_time_unref (now);
 
     /* Main Loop */
     g_loop = g_main_loop_new (NULL, FALSE);

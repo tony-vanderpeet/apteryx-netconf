@@ -71,8 +71,22 @@ def test_edit_config_bad_target():
   </test>
 </config>
 """
-    _edit_config_test(payload, post_xpath='/test/settings/priority', targ="candidate",
+    _edit_config_test(payload, targ="candidate",
                       expect_err={"tag": "operation-not-supported", "type": "protocol"})
+
+
+def test_edit_config_bad_operation():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+        <priority xc:operation="bob">5</priority>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "unknown-attribute", "type": "protocol"})
 
 
 def test_edit_config_multi():
