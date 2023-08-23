@@ -1068,7 +1068,7 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                 qschema = NULL;
                 parms =
                     sch_xml_to_gnode (g_schema, NULL, tnode,
-                                        schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY, "none",
+                                        schflags | SCH_F_STRIP_DATA | SCH_F_STRIP_KEY, "merge",
                                         false, &qschema);
                 query = sch_parm_tree (parms);
                 sch_parm_free (parms);
@@ -1240,6 +1240,62 @@ _check_exist (const char *check_xpath, NC_ERR_TAG *err_tag, bool expected)
     apteryx_free_tree (check_result);
 }
 
+/**
+ * Process the default-operation option in an edit element, returning whether the
+ * edit_config processing can continue. The other return via passed in pointers is
+ * the default operation (points to a static string)
+ */
+static bool
+_handle_default_operation (xmlNode *action, char **def_op_pt)
+{
+    xmlNode *def_op_node;
+    xmlChar *def_op_content;
+    bool def_op_inv_value = false;
+
+    /* Find the default-operation parameter, if not there, just return with def_op set to "merge" */
+    def_op_node = xmlFindNodeByName (action, BAD_CAST "default-operation");
+    if (!def_op_node)
+    {
+        *def_op_pt = "merge";
+        return true;
+    }
+
+    /* Check the parameter contents. */
+    def_op_content = xmlNodeGetContent (def_op_node);
+    if (def_op_content)
+    {
+        if (g_strcmp0 ((char *) def_op_content, "merge") == 0)
+        {
+            *def_op_pt = "merge";
+        }
+        else if (g_strcmp0 ((char *) def_op_content, "replace") == 0)
+        {
+            *def_op_pt = "replace";
+        }
+        else if (g_strcmp0 ((char *) def_op_content, "none") == 0)
+        {
+            *def_op_pt = "none";
+        }
+        else
+        {
+            def_op_inv_value = true;
+        }
+        xmlFree (def_op_content);
+    }
+    else
+    {
+        def_op_inv_value = true;
+    }
+
+    /* If contents are invalid, send RPC error */
+    if (def_op_inv_value)
+    {
+        return false;
+    }
+    return true;
+}
+
+
 static bool
 handle_edit (struct netconf_session *session, xmlNode * rpc)
 {
@@ -1251,6 +1307,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     int schflags = 0;
     GList *iter;
     bool ret = false;
+    char *def_op = NULL;
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
@@ -1269,10 +1326,16 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         return ret;
     }
 
-    //TODO Check default-operation
+    /* Check and record default-operation */
+    if (!_handle_default_operation (action, &def_op))
+    {
+        return send_rpc_error_full (session, rpc, NC_ERR_TAG_INVALID_VAL, NC_ERR_TYPE_PROTOCOL,
+                                    "Invalid value for default-operation parameter", NULL, NULL, true);
+    }
+
     //TODO Check test-option
     //TODO Check error-option
-    //
+
     /* Validate lock if configured on the running datastore */
     if (running_ds_lock.locked == TRUE && (session->id != running_ds_lock.nc_sess.id))
     {
@@ -1295,7 +1358,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
 
     /* Convert to gnode */
     parms =
-        sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, "merge",
+        sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, def_op,
                           true, &qschema);
     tree = sch_parm_tree (parms);
     nc_error_parms error_parms = sch_parm_error (parms);
