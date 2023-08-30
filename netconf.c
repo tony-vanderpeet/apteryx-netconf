@@ -1726,7 +1726,7 @@ _netconf_sessions_refresh (const char *path)
                       g_strdup_printf ("%d", nc_session->counters.in_rpcs));
         APTERYX_LEAF (sess, g_strdup ("in-bad-rpcs"),
                       g_strdup_printf ("%d", nc_session->counters.in_bad_rpcs));
-        APTERYX_LEAF (sess, g_strdup ("out-rpc_errors"),
+        APTERYX_LEAF (sess, g_strdup ("out-rpc-errors"),
                       g_strdup_printf ("%d", nc_session->counters.out_rpc_errors));
         APTERYX_LEAF (sess, g_strdup ("out-notifications"),
                       g_strdup_printf ("%d", nc_session->counters.out_notifications));
@@ -1764,7 +1764,7 @@ _netconf_statistics_refresh (const char *path)
                   g_strdup_printf ("%d", netconf_global_stats.session_totals.in_rpcs));
     APTERYX_LEAF (root, g_strdup ("in-bad-rpcs"),
                   g_strdup_printf ("%d", netconf_global_stats.session_totals.in_bad_rpcs));
-    APTERYX_LEAF (root, g_strdup ("out-rpc_errors"),
+    APTERYX_LEAF (root, g_strdup ("out-rpc-errors"),
                   g_strdup_printf ("%d", netconf_global_stats.session_totals.out_rpc_errors));
     APTERYX_LEAF (root, g_strdup ("out-notifications"),
                   g_strdup_printf ("%d", netconf_global_stats.session_totals.out_notifications));
@@ -1985,7 +1985,12 @@ netconf_handle_session (int fd)
     struct timeval timeout;
     timeout.tv_sec = RECV_TIMEOUT_SEC;
     timeout.tv_usec = 0;
-    int rc = setsockopt (fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof (timeout));
+    if (setsockopt (fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof (timeout)) < 0)
+    {
+        netconf_global_stats.dropped_sessions++;
+        destroy_session (session);
+        return NULL;
+    }
 
     /* Get user information from the calling process */
     if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &ucred, &len) >= 0)
