@@ -89,6 +89,20 @@ def test_edit_config_bad_operation():
     _edit_config_test(payload, expect_err={"tag": "unknown-attribute", "type": "protocol"})
 
 
+def test_edit_config_non_writable():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <state>
+        <counter>7734</counter>
+    </state>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
 def test_edit_config_multi():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
