@@ -872,10 +872,13 @@ get_query_to_xml (struct netconf_session *session, GNode *query, sch_node *rsche
 
     /* Query database */
     DEBUG ("NETCONF: GET %s\n", query ? APTERYX_NAME (query) : "/");
-    if (netconf_logging_test_flag (LOG_GET | LOG_GET_CONFIG))
+    if ((netconf_logging_test_flag (LOG_GET) && !(schflags & SCH_F_CONFIG)) ||
+        (netconf_logging_test_flag (LOG_GET_CONFIG) && (schflags & SCH_F_CONFIG)))
+    {
         NOTICE ("%s: user:%s session-id:%d path:%s\n",
                 (schflags & SCH_F_CONFIG) ? "GET-CONFIG" : "GET", session->username, session->id,
                 query ? APTERYX_NAME (query) : "/");
+    }
 
     tree = query ? apteryx_query (query) : get_full_tree ();
     if (rschema && (schflags & SCH_F_ADD_DEFAULTS))
