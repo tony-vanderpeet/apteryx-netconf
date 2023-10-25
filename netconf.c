@@ -886,14 +886,14 @@ get_query_to_xml (struct netconf_session *session, GNode *query, sch_node *rsche
         if (tree)
         {
             rnode = get_response_node (tree, rdepth);
-            sch_traverse_tree (g_schema, rschema, rnode, schflags);
+            sch_traverse_tree (g_schema, rschema, rnode, schflags, 0);
         }
         else if (!tree)
         {
             /* Nothing in the database, but we may have defaults! */
             tree = query;
             query = NULL;
-            sch_traverse_tree (g_schema, rschema, qnode, schflags);
+            sch_traverse_tree (g_schema, rschema, qnode, schflags, 0);
         }
     }
 
@@ -901,7 +901,7 @@ get_query_to_xml (struct netconf_session *session, GNode *query, sch_node *rsche
     {
         /* Get rid of any unwanted nodes */
         GNode *rnode = get_response_node (tree, rdepth);
-        sch_traverse_tree (g_schema, rschema, rnode, schflags);
+        sch_traverse_tree (g_schema, rschema, rnode, schflags, 0);
      }
     apteryx_free_tree (query);
 
