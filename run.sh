@@ -132,7 +132,7 @@ rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 # Start sshd
 sudo useradd -M -p $(perl -e 'print crypt($ARGV[0], "password")' 'friend') manager
 grep manager /etc/passwd
-socat -h
+socat -V
 ls -l $BUILD
 echo $(perl -e 'print crypt($ARGV[0], "password")' 'friend')
 netstat -l --tcp
