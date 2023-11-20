@@ -159,8 +159,9 @@ cd $BUILD/../
 
 if [ $ACTION == "test" ]; then
         python3 -m pytest -v $ROOT/tests/test_def_op.py::test_def_op_none
-	journalctl -u sshd
-	rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
+	rc=$?
+	sudo journalctl -u sshd
+	if [[ $rc != 0 ]]; then quit $rc; fi
 fi
 
 # Gcov
