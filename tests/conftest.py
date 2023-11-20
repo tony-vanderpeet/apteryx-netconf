@@ -98,6 +98,9 @@ def run_around_tests():
     apteryx_prune("/test")
     apteryx_prune("/t2:test")
 
+def r_true():
+    return True
+
 
 def connect():
     return manager.connect(host=host,
@@ -106,7 +109,8 @@ def connect():
                            password=password,
                            hostkey_verify=False,
                            allow_agent=False,
-                           look_for_keys=False)
+                           look_for_keys=False,
+                           unknown_host_cb=r_true)
 
 
 def toXML(xml_str):
