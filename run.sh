@@ -140,6 +140,7 @@ cat $BUILD/sshd_config
 sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 netstat -l --tcp
+ls -l $BUILD
 
 # Parameters
 if [ $ACTION == "test" ]; then
