@@ -165,6 +165,7 @@ if [ $ACTION == "test" ]; then
         python3 -m pytest -v $ROOT/tests/test_def_op.py::test_def_op_none
 	rc=$?
 	sudo journalctl -u sshd
+ 	sudo cat /var/log/secure
  	$BUILD/usr/bin/apteryx -t /netconf
   	$BUILD/usr/bin/apteryx -t /netconf-state
 	if [[ $rc != 0 ]]; then quit $rc; fi
