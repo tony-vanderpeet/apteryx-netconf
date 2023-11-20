@@ -161,6 +161,7 @@ if [ $ACTION == "test" ]; then
         python3 -m pytest -v
         rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 fi
+journalctl -u sshd
 
 # Gcov
 mkdir -p .gcov
