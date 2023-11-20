@@ -159,6 +159,7 @@ G_SLICE=always-malloc LD_LIBRARY_PATH=$BUILD/usr/lib \
 rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 sleep 0.5
 cd $BUILD/../
+ls -l $BUILD
 
 if [ $ACTION == "test" ]; then
         python3 -m pytest -v $ROOT/tests/test_def_op.py::test_def_op_none
