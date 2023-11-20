@@ -134,7 +134,7 @@ grep manager /etc/passwd
 echo $(perl -e 'print crypt($ARGV[0], "password")' 'friend')
 netstat -l --tcp
 cat $BUILD/sshd_config
-sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
+sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config -vvv
 rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 netstat -l --tcp
 
