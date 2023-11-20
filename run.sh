@@ -93,7 +93,7 @@ echo -e "
 HostKey $BUILD/ssh_host_rsa_key
 HostKeyAlgorithms ssh-rsa,ssh-dss
 Port 830
-Subsystem netconf /usr/bin/socat STDIO UNIX:$BUILD/apteryx-netconf.sock
+Subsystem netconf /usr/bin/socat -d -d -d -d STDIO UNIX:$BUILD/apteryx-netconf.sock
 PidFile /tmp/apteryx-netconf-sshd.pid
 LogLevel DEBUG3
 " > $BUILD/sshd_config
