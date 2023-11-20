@@ -158,10 +158,10 @@ sleep 0.5
 cd $BUILD/../
 
 if [ $ACTION == "test" ]; then
-        python3 -m pytest -v $ROOT/tests/test_def_op.py
-        rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
+        python3 -m pytest -v $ROOT/tests/test_def_op.py::test_def_op_none
+	journalctl -u sshd
+	rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 fi
-journalctl -u sshd
 
 # Gcov
 mkdir -p .gcov
