@@ -132,6 +132,8 @@ rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 sudo useradd -M -p $(perl -e 'print crypt($ARGV[0], "password")' 'friend') manager
 grep manager /etc/passwd
 echo $(perl -e 'print crypt($ARGV[0], "password")' 'friend')
+netstat -l --tcp
+cat $BUILD/sshd_config
 sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 
