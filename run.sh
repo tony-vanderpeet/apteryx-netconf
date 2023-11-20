@@ -95,6 +95,7 @@ HostKeyAlgorithms ssh-rsa,ssh-dss
 Port 830
 Subsystem netconf /usr/bin/socat STDIO UNIX:$BUILD/apteryx-netconf.sock
 PidFile /tmp/apteryx-netconf-sshd.pid
+LogLevel DEBUG3
 " > $BUILD/sshd_config
 
 # Build
@@ -134,7 +135,7 @@ grep manager /etc/passwd
 echo $(perl -e 'print crypt($ARGV[0], "password")' 'friend')
 netstat -l --tcp
 cat $BUILD/sshd_config
-sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config -vvv
+sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
 rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 netstat -l --tcp
 
