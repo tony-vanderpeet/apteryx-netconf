@@ -21,6 +21,8 @@ function quit {
         if [ -f /tmp/apteryx-netconf-sshd.pid ]; then
                 sudo kill -9 `cat /tmp/apteryx-netconf-sshd.pid` &> /dev/null
                 sudo rm -f /tmp/apteryx-netconf-sshd.pid
+	else
+ 		echo "sshd was not running"
         fi
         # Stop apteryx-netconf
         killall apteryx-netconf &> /dev/null
