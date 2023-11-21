@@ -58,22 +58,28 @@ netconf_accept_thread (gpointer data)
     const char *path = (const char *) data;
     struct sockaddr_un addr_un;
 
+    netconf_global_stats.in_bad_hellos++;
     memset (&addr_un, 0, sizeof (addr_un));
     addr_un.sun_family = AF_UNIX;
     strncpy (addr_un.sun_path, path, sizeof (addr_un.sun_path) - 1);
 
+    netconf_global_stats.in_bad_hellos++;
     accept_fd = socket (PF_UNIX, SOCK_STREAM, 0);
     if (accept_fd < 0)
         g_error ("Socket(%s) failed: %s\n", path, strerror (errno));
+    netconf_global_stats.in_bad_hellos++;
     if (bind (accept_fd, (struct sockaddr *) &addr_un, sizeof (addr_un)) < 0)
         g_error ("Socket(%s) error binding: %s\n", path, strerror (errno));
+    netconf_global_stats.in_bad_hellos++;
     if (listen (accept_fd, 255) < 0)
         g_error ("Socket(%s) listen failed: %s\n", path, strerror (errno));
     chmod (path, 0666);
+    netconf_global_stats.in_bad_hellos++;
 
     usleep (500000);
     VERBOSE ("NETCONF: Accepting client connections\n");
     workers = g_thread_pool_new ((GFunc) netconf_handle_session, NULL, -1, FALSE, NULL);
+    netconf_global_stats.in_bad_hellos++;
     while (g_main_loop_is_running (g_loop))
     {
         struct sockaddr addr;
