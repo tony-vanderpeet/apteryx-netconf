@@ -99,7 +99,7 @@ def run_around_tests():
     apteryx_prune("/t2:test")
 
 
-def r_true(fingerprint):
+def r_true(host, fingerprint):
     return True
 
 
