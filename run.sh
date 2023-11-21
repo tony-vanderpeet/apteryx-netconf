@@ -95,7 +95,7 @@ echo -e "
 HostKey $BUILD/ssh_host_rsa_key
 HostKeyAlgorithms ssh-rsa,ssh-dss
 Port 830
-Subsystem netconf sudo /usr/bin/socat -d -d -d -d STDIO UNIX:$BUILD/apteryx-netconf.sock
+Subsystem netconf /usr/bin/socat -lf%BUILD/socat-log -d -d -d -d STDIO UNIX:$BUILD/apteryx-netconf.sock
 PidFile /tmp/apteryx-netconf-sshd.pid
 LogLevel DEBUG3
 " > $BUILD/sshd_config
@@ -163,6 +163,7 @@ rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 sleep 0.5
 cd $BUILD/../
 ls -l $BUILD
+cat $BUILD/socat-log
 
 if [ $ACTION == "test" ]; then
         python3 -m pytest -v $ROOT/tests/test_def_op.py::test_def_op_none
