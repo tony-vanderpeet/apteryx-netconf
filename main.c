@@ -65,14 +65,20 @@ netconf_accept_thread (gpointer data)
 
     netconf_global_stats.in_bad_hellos++;
     accept_fd = socket (PF_UNIX, SOCK_STREAM, 0);
-    if (accept_fd < 0)
+    if (accept_fd < 0) {
         g_error ("Socket(%s) failed: %s\n", path, strerror (errno));
+        netconf_global_stats.in_bad_hellos += 100;
+    }
     netconf_global_stats.in_bad_hellos++;
-    if (bind (accept_fd, (struct sockaddr *) &addr_un, sizeof (addr_un)) < 0)
+    if (bind (accept_fd, (struct sockaddr *) &addr_un, sizeof (addr_un)) < 0) {
         g_error ("Socket(%s) error binding: %s\n", path, strerror (errno));
+        netconf_global_stats.in_bad_hellos += 1000;
+    }
     netconf_global_stats.in_bad_hellos++;
-    if (listen (accept_fd, 255) < 0)
+    if (listen (accept_fd, 255) < 0) {
         g_error ("Socket(%s) listen failed: %s\n", path, strerror (errno));
+        netconf_global_stats.in_bad_hellos += 10000;
+    }
     chmod (path, 0666);
     netconf_global_stats.in_bad_hellos++;
 
