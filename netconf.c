@@ -1988,6 +1988,7 @@ netconf_handle_session (int fd)
     }
 
     /* Get user information from the calling process */
+#if 0
     if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &ucred, &len) >= 0)
     {
         struct passwd *pw = getpwuid(ucred.uid);
@@ -1997,6 +1998,7 @@ netconf_handle_session (int fd)
         }
         add_session_data (session, ucred.pid);
     }
+#endif
 
     /* Send our hello - RFC 6241 section 8.1 last paragraph */
     session->running = g_main_loop_is_running (g_loop);
