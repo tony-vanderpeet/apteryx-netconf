@@ -1968,8 +1968,8 @@ void *
 netconf_handle_session (int fd)
 {
     struct netconf_session *session = create_session (fd);
-    struct ucred ucred;
-    socklen_t len = sizeof (struct ucred);
+    //struct ucred ucred;
+    //socklen_t len = sizeof (struct ucred);
 
     if (!session->running || netconf_num_sessions > netconf_max_sessions)
     {
