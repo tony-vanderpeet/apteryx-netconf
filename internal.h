@@ -93,7 +93,7 @@ extern GMainLoop *g_loop;
 void netconf_close_open_sessions (void);
 gboolean netconf_init (const char *path, const char *supported, const char *logging,
                        const char *cp, const char *rm);
-void *netconf_handle_session (int fd);
+void *netconf_handle_session (gpointer fd_dummy);
 void netconf_shutdown (void);
 
 /* Logging routines */
