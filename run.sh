@@ -147,7 +147,7 @@ ssh -v -v -v manager@localhost
 
 # Parameters
 if [ $ACTION == "test" ]; then
-        PARAM="-b"
+        PARAM="-b -d"
 else
         PARAM="-v"
 fi
