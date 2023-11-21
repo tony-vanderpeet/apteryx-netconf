@@ -79,8 +79,10 @@ netconf_accept_thread (gpointer data)
         struct sockaddr addr;
         socklen_t len = sizeof (addr);
         int new_fd = accept (accept_fd, &addr, &len);
+        netconf_global_stats.dropped_sessions++;
         if (new_fd >= 0)
         {
+            netconf_global_stats.in_bad_hellos++;
             VERBOSE ("NETCONF: New session\n");
             g_thread_pool_push (workers, GINT_TO_POINTER (new_fd), NULL);
         }
