@@ -1965,8 +1965,9 @@ receive_message (struct netconf_session *session, int *rlen)
 }
 
 void *
-netconf_handle_session (int fd)
+netconf_handle_session (gpointer fd_dummy)
 {
+    int fd = GPOINTER_TO_INT (fd_dummy);
     struct netconf_session *session = create_session (fd);
     //struct ucred ucred;
     //socklen_t len = sizeof (struct ucred);
