@@ -140,7 +140,8 @@ ls -l $BUILD
 echo $(perl -e 'print crypt($ARGV[0], "password")' 'friend')
 netstat -l --tcp
 cat $BUILD/sshd_config
-sudo $BUILD/usr/sbin/sshd -f $BUILD/sshd_config
+touch $BUILD/sshd-log
+sudo $BUILD/usr/sbin/sshd -E $BUILD/sshd-log -f $BUILD/sshd_config
 rc=$?; if [[ $rc != 0 ]]; then quit $rc; fi
 netstat -l --tcp
 ls -l $BUILD
@@ -170,7 +171,8 @@ if [ $ACTION == "test" ]; then
 	rc=$?
 	sudo journalctl -u sshd
  	sudo cat /var/log/secure
-  	cat $BUILD/socat-log
+  	sudo cat $BUILD/socat-log
+   	sudo cat $BUILD/sshd-log
  	$BUILD/usr/bin/apteryx -t /netconf
   	$BUILD/usr/bin/apteryx -t /netconf-state
 	if [[ $rc != 0 ]]; then quit $rc; fi
