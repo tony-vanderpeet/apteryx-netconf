@@ -1609,6 +1609,7 @@ handle_kill_session (struct netconf_session *session, xmlNode * rpc)
 /**
  * Add session data for this session based on the PID of the remote socat process.
  */
+#if 0
 static void
 add_session_data (struct netconf_session *session, uint32_t pid)
 {
@@ -1665,6 +1666,7 @@ add_session_data (struct netconf_session *session, uint32_t pid)
 cleanup:
     g_free (contents);
 }
+#endif
 
 /**
  * Refresh function for /netconf-state/sessions/session/<*>
