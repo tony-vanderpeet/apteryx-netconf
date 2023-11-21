@@ -92,7 +92,7 @@ if [ ! -f $BUILD/ssh_host_rsa_key ]; then
     $BUILD/usr/bin/ssh-keygen -b 2048 -t rsa -f $BUILD/ssh_host_rsa_key -q -N ""
 fi
 echo -e "
-HostKey $BUILD/ssh_host_rsa_key
+HostKey $BUILD/ssh_host_rsa_key.pub
 HostKeyAlgorithms ssh-rsa,ssh-dss
 Port 830
 Subsystem netconf /usr/bin/socat -d -d -d -d STDIO UNIX:$BUILD/apteryx-netconf.sock
