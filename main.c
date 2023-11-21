@@ -80,6 +80,7 @@ netconf_accept_thread (gpointer data)
         netconf_global_stats.in_bad_hellos += 10000;
     }
     chmod (path, 0666);
+    apteryx_set ("/netconf-state/socket-path", path);
     netconf_global_stats.in_bad_hellos++;
 
     usleep (500000);
