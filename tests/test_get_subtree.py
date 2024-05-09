@@ -1,7 +1,7 @@
 import pytest
 from ncclient.xml_ import to_ele
 from lxml import etree
-from conftest import connect, _get_test_with_filter, apteryx_set
+from conftest import connect, _get_test_with_filter, apteryx_set, apteryx_proxy
 
 
 def test_get_subtree_no_filter():
@@ -732,3 +732,28 @@ def test_get_subtree_select_interface():
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert xml.find('./{*}interfaces/{*}interface[{*}name="eth2"]/{*}status').text == 'not feeling so good'
     m.close_session()
+
+
+def test_get_subtree_proxy_named_element():
+    apteryx_set("/logical-elements/logical-element/loop/name", "loopy")
+    apteryx_set("/logical-elements/logical-element/loop/root", "root")
+    apteryx_set("/apteryx/sockets/E18FE205",  "tcp://127.0.0.1:9999")
+    apteryx_proxy("/logical-elements/logical-element/loopy/*", "tcp://127.0.0.1:9999")
+    select = '<logical-elements><logical-element><name>loopy</name><test><animals><animal name="mouse"><type/></animal></animals></test></logical-element></logical-elements>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-elements xmlns="http://example.com/ns/logical-elements">
+    <logical-element>
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>mouse</name>
+            <type>little</type>
+          </animal>
+        </animals>
+      </test>
+    </logical-element>
+  </logical-elements>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)

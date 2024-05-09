@@ -1,4 +1,4 @@
-from conftest import _get_test_with_filter
+from conftest import _get_test_with_filter, apteryx_set, apteryx_proxy, _get_test_with_filter_expect_error
 
 
 # GET XPATH
@@ -5781,9 +5781,9 @@ def test_get_xpath_relative_path_dot_dot():
 def test_get_xpath_relative_path_dot_dot_root():
     xpath = "/.."
     expected = """
-<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"/>
+XPATH: malformed filter
     """
-    _get_test_with_filter(xpath, expected, f_type='xpath')
+    _get_test_with_filter_expect_error(xpath, expected, f_type='xpath')
 
 
 def test_get_xpath_relative_path_dot_dot_field():
@@ -5885,9 +5885,9 @@ def test_get_xpath_relative_path_dot_dot_dot_dot():
 def test_get_xpath_relative_path_dot_dot_dot_dot_dot_dot():
     xpath = "/test/animals/animal/../../.."
     expected = """
-<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0"/>
+XPATH: malformed filter
     """
-    _get_test_with_filter(xpath, expected, f_type='xpath')
+    _get_test_with_filter_expect_error(xpath, expected, f_type='xpath')
 
 
 def test_get_xpath_slash_slash_ns():
@@ -5971,5 +5971,151 @@ def test_get_xpath_node_wildcard_2():
   </test>
 </nc:data>
 
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_entry_leaf_node_1():
+    xpath = "/test/animals/animal[name='hamster']"
+    expected = """
+    <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>hamster</name>
+            <type>little</type>
+            <food>
+              <name>banana</name>
+              <type>fruit</type>
+            </food>
+            <food>
+              <name>nuts</name>
+              <type>kibble</type>
+            </food>
+          </animal>
+        </animals>
+      </test>
+    </nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_entry_leaf_node_2():
+    xpath = "/test/animals/animal/name"
+    expected = """
+    <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>cat</name>
+          </animal>
+          <animal>
+            <name>dog</name>
+          </animal>
+          <animal>
+            <name>hamster</name>
+          </animal>
+          <animal>
+            <name>mouse</name>
+          </animal>
+          <animal>
+            <name>parrot</name>
+          </animal>
+        </animals>
+      </test>
+    </nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_entry_leaf_node_3():
+    xpath = "/test/animals/animal/colour"
+    expected = """
+    <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>dog</name>
+            <colour>brown</colour>
+          </animal>
+          <animal>
+            <name>mouse</name>
+            <colour>grey</colour>
+          </animal>
+          <animal>
+            <name>parrot</name>
+            <colour>blue</colour>
+          </animal>
+        </animals>
+      </test>
+    </nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_entry_leaf_node_4():
+    xpath = "/test/animals/animal/toys"
+    expected = """
+    <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>parrot</name>
+            <toys>
+              <toy>puzzles</toy>
+              <toy>rings</toy>
+            </toys>
+          </animal>
+        </animals>
+      </test>
+    </nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_entry_leaf_node_5():
+    xpath = "/test/animals/animal/food/name"
+    expected = """
+    <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>hamster</name>
+            <food>
+              <name>banana</name>
+            </food>
+            <food>
+              <name>nuts</name>
+            </food>
+          </animal>
+        </animals>
+      </test>
+    </nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_proxy_list_select_one_trunk():
+    apteryx_set("/logical-elements/logical-element/loop/name", "loopy")
+    apteryx_set("/logical-elements/logical-element/loop/root", "root")
+    apteryx_set("/apteryx/sockets/E18FE205",  "tcp://127.0.0.1:9999")
+    apteryx_proxy("/logical-elements/logical-element/loopy/*", "tcp://127.0.0.1:9999")
+    xpath = "/logical-elements/logical-element[name='loopy']/test/animals/animal[name='cat']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-elements xmlns="http://example.com/ns/logical-elements">
+    <logical-element>
+      <name>loopy</name>
+      <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+          <animal>
+            <name>cat</name>
+            <type>big</type>
+          </animal>
+        </animals>
+      </test>
+    </logical-element>
+  </logical-elements>
+</nc:data>
     """
     _get_test_with_filter(xpath, expected, f_type='xpath')

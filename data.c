@@ -34,6 +34,85 @@ typedef struct _sch_xml_to_gnode_parms_s
     GList *out_replaces;
 } _sch_xml_to_gnode_parms;
 
+static bool
+_sch_node_find_name (xmlNs *ns, sch_node * parent, const char *path_name, GList **path_list)
+{
+    xmlNode *xml = (xmlNode *) parent;
+    xmlNode *n = NULL;
+    bool found = false;
+
+    n = xml->children;
+    while (n)
+    {
+        if (n->type == XML_ELEMENT_NODE && n->name[0] == 'N')
+        {
+            char *name = (char *) xmlGetProp (n, (xmlChar *) "name");
+            if (sch_match_name (name, path_name) && sch_ns_match (n, ns))
+            {
+                xmlFree (name);
+                found = true;
+                break;
+            }
+            if (n->children)
+            {
+                found = _sch_node_find_name (ns, n, path_name, path_list);
+                if (found)
+                {
+                    *path_list = g_list_prepend (*path_list, g_strdup (name));
+                    xmlFree (name);
+                    break;
+                }
+            }
+            xmlFree (name);
+        }
+        n = n->next;
+    }
+    return found;
+}
+
+static bool
+sch_node_find_name (sch_instance *instance, xmlNs *ns, sch_node *parent, const char *path, int flags, GList **path_list)
+{
+    char *name;
+    char *next;
+    char *colon;
+    bool found = false;
+
+    if (path && path[0] == '/')
+    {
+        path++;
+
+        /* Parse path element */
+        next = strchr (path, '/');
+        if (next)
+            name = g_strndup (path, next - path);
+        else
+            name = g_strdup (path);
+        colon = strchr (name, ':');
+        if (colon)
+        {
+            colon[0] = '\0';
+            xmlNs *nns = sch_lookup_ns (instance, parent, name, flags, false);
+            if (!nns)
+            {
+                /* No namespace found assume the node is supposed to have a colon in it */
+                colon[0] = ':';
+            }
+            else
+            {
+                /* We found a namespace. Remove the prefix */
+                char *_name = name;
+                name = g_strdup (colon + 1);
+                free (_name);
+                ns = nns;
+            }
+        }
+        found = _sch_node_find_name (ns, parent, name, path_list);
+        g_free (name);
+    }
+    return found;
+}
+
 static xmlNode *
 _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNode * parent,
                    GNode * node, int flags, int depth)
@@ -78,12 +157,46 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
     }
 
     /* Find schema node */
-    if (!schema)
-        schema = sch_get_root_schema (instance);
-    schema = sch_ns_node_child (ns, schema, name);
+    if (sch_is_proxy (schema))
+    {
+        /* Two possible cases, the node is a child of the proxy node or we need to
+         * move to access the remote database via the proxy */
+        schema = sch_ns_node_child (ns, schema, name);
+        if (!schema)
+        {
+            schema = sch_get_root_schema (instance);
+            colon = strchr (name, ':');
+            if (schema && colon)
+            {
+                colon[0] = '\0';
+                xmlNs *nns = sch_lookup_ns (instance, schema, name, flags, false);
+                if (!nns)
+                {
+                    /* No namespace found assume the node is supposed to have a colon in it */
+                    colon[0] = ':';
+                }
+                else
+                {
+                    /* We found a namespace. Remove the prefix */
+                    char *_name = name;
+                    name = g_strdup (colon + 1);
+                    free (_name);
+                    ns = nns;
+                }
+            }
+            schema = sch_ns_node_child (ns, schema, name);
+        }
+    }
+    else
+    {
+        if (!schema)
+            schema = sch_get_root_schema (instance);
+        schema = sch_ns_node_child (ns, schema, name);
+    }
+
     if (schema == NULL)
     {
-        ERROR ("No schema match for gnode %s%s%s\n",
+        DEBUG ("No schema match for gnode %s%s%s\n",
                ns ? sch_ns_prefix (instance, ns) : "", ns ? ":" : "", name);
         free (name);
         return NULL;
@@ -380,7 +493,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     char *new_op = curr_op;
     bool key_valid = false;
     bool ret_tree = false;
-
+    bool is_proxy = false;
 
     /* Detect change in namespace */
     if (xml->ns && xml->ns->href)
@@ -391,8 +504,27 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     }
 
     /* Find schema node */
-    if (!schema)
+    if (schema && sch_is_proxy (schema))
+    {
+        /* The schema containing the proxy node can have children */
+        sch_node *child = sch_ns_node_child (ns, schema, name);
+        if (!child)
+        {
+            is_proxy = sch_is_proxy (schema);
+        }
+    }
+
+    if (!schema || is_proxy)
+    {
         schema = sch_get_root_schema (instance);
+        /* Detect change in namespace with the new schema */
+        if (xml->ns && xml->ns->href)
+        {
+             sch_ns *nns = sch_lookup_ns (instance, schema, (const char *) xml->ns->href, flags, true);
+             if (nns)
+                ns = nns;
+        }
+    }
     schema = sch_ns_node_child (ns, schema, name);
     if (schema == NULL)
     {
@@ -406,7 +538,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
         *rschema = schema;
 
     /* Prepend non default namespaces to root nodes */
-    if (depth == 0 && ns && sch_ns_prefix (instance, ns) && !sch_ns_native (instance, ns))
+    if ((depth == 0 || is_proxy) && ns && sch_ns_prefix (instance, ns) && !sch_ns_native (instance, ns))
         name = g_strdup_printf ("%s:%s", sch_ns_prefix (instance, ns), (const char *) xml->name);
     else
         name = g_strdup ((char *) xml->name);
@@ -631,7 +763,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                 break;
             }
             /* Multiple children - make sure key appears */
-            else if (xmlChildElementCount (xml) > 1)
+            else if (xmlChildElementCount (xml) > 1 && !sch_is_proxy (schema))
             {
                 GNode *_node = APTERYX_NODE (node, g_strdup ((const char *) child->name));
                 DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
@@ -652,7 +784,10 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
             }
             if (cn)
             {
-                g_node_append (node, cn);
+                if (node)
+                    g_node_append (node, cn);
+                else
+                    tree = cn;
                 ret_tree = true;
             }
         }
@@ -682,7 +817,7 @@ exit:
     free (key);
     if (!tree)
     {
-        ERROR ("returning NULL: xpath=%s\n", new_xpath);
+        DEBUG ("returning NULL: xpath=%s\n", new_xpath);
     }
     g_free (new_xpath);
     return tree;
@@ -711,8 +846,14 @@ sch_xml_to_gnode (sch_instance * instance, sch_node * schema, xmlNode * xml, int
 {
     _sch_xml_to_gnode_parms *_parms = sch_parms_init(instance, flags, def_op, is_edit);
 
-    _parms->out_tree = _sch_xml_to_gnode (_parms, schema, NULL, "", def_op, NULL, xml, 0,
-                                          rschema);
+    if (xml)
+        _parms->out_tree = _sch_xml_to_gnode (_parms, schema, NULL, "", def_op, NULL, xml, 0,
+                                              rschema);
+    else
+    {
+        _parms->out_error.tag = NC_ERR_TAG_INVALID_VAL;
+        _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
+    }
     return (sch_xml_to_gnode_parms) _parms;
 }
 
@@ -803,4 +944,559 @@ sch_parm_free (sch_xml_to_gnode_parms parms)
         g_hash_table_destroy (_parms->out_error.info);
         g_free (_parms);
     }
+}
+
+static char *
+sch_xpath_update_path (char *path, const char *prefix)
+{
+    char *new_path = NULL;
+    char *colon = strchr (path, ':');
+    if (!colon && prefix)
+    {
+        new_path = g_strdup_printf ("%s:%s", prefix, path);
+    }
+    else if (colon)
+    {
+        /* Check for XPATH keyword operators */
+        if (strlen (colon) > 1 && *(colon + 1) == ':')
+            return NULL;
+        new_path = g_strdup_printf ("%s:%s",  prefix, colon + 1);
+    }
+    return new_path;
+}
+
+static void
+sch_xpath_change_ns (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNode * xml,
+                     int depth, xmlXPathContext *xpath_ctx, gchar **path_split, int count)
+{
+    char *name = (char *) xml->name;
+    const char *href;
+    const char *prefix;
+    bool slash_slash = false;
+    char *new_xpath = NULL;
+
+    sch_ns *nns = sch_lookup_ns (instance, schema, (const char *) xml->ns->href, 0, true);
+
+    if (depth < count && strlen (path_split[depth]) == 0 && strlen (path_split[depth + 1]) == 0)
+        slash_slash = true;
+
+    if (nns && !slash_slash)
+    {
+        href = sch_ns_href (instance, nns);
+        prefix = sch_ns_prefix (instance, nns);
+        if (!prefix)
+            prefix = name;
+
+        xmlXPathRegisterNs (xpath_ctx,  BAD_CAST prefix, BAD_CAST href);
+        new_xpath = sch_xpath_update_path (path_split[depth + 1], prefix);
+        if (new_xpath)
+        {
+            g_free (path_split[depth + 1]);
+            path_split[depth + 1] = new_xpath;
+        }
+        ns = nns;
+    }
+}
+
+static bool
+sch_xpath_process_relatives (gchar **path_split, int *count)
+{
+    int i;
+    int k;
+
+    for (i = 0; i < *count; i++)
+    {
+        if (strlen (path_split[i]) == 2 && g_strcmp0 (path_split[i], "..") == 0)
+        {
+            if (i == 0 || strlen (path_split[i - 1]) == 0)
+                return false;
+
+            /* move up all following entries down two slots */
+            g_free (path_split[i - 1]);
+            path_split[i - 1] = NULL;
+            g_free (path_split[i]);
+            path_split[i] = NULL;
+            for (k = i; k < *count - 1; k++)
+            {
+                path_split[k - 1] = path_split[k + 1];
+            }
+            path_split[k - 1] = NULL;
+            path_split[k] = NULL;
+            *count = *count - 2;
+            i -= 2;
+        }
+        if (strlen (path_split[i]) == 1 && g_strcmp0 (path_split[i], ".") == 0)
+        {
+            g_free (path_split[i]);
+            path_split[i] = NULL;
+            for (k = i; k < *count - 1; k++)
+            {
+                path_split[k] = path_split[k + 1];
+            }
+            path_split[k] = NULL;
+            *count = *count - 1;
+            i -= 1;
+        }
+    }
+
+    return true;
+}
+
+static bool
+sch_xpath_is_simple (const char *path, xpath_type *x_type)
+{
+    if (path[0] == '/')
+    {
+        path++;
+        if (path[0] == '/')
+        {
+            *x_type = XPATH_EVALUATE;
+            return false;
+        }
+    }
+
+    if (strncmp (path, "node(", 5) == 0)
+    {
+        *x_type = XPATH_EVALUATE;
+        return false;
+    }
+    return true;
+}
+
+static GNode *
+_sch_xpath_to_gnode (sch_instance * instance, sch_node ** rschema, sch_node ** vschema, xmlNs *ns,
+                     const char *path, int flags, int depth, xpath_type *x_type)
+{
+    sch_node *schema = rschema && *rschema ? *rschema : sch_get_root_schema (instance);
+    const char *next = NULL;
+    GNode *node = NULL;
+    GNode *rnode = NULL;
+    GNode *child = NULL;
+    char *query = NULL;
+    char *pred = NULL;
+    char *equals = NULL;
+    char *new_path = NULL;
+    char *colon;
+    char *name = NULL;
+    sch_node *last_good_schema = NULL;
+    bool is_proxy = false;
+
+
+    if (path && path[0] == '/')
+    {
+        path++;
+
+        /* Parse path element */
+        query = strchr (path, '?');
+        next = strchr (path, '/');
+        if (query && (!next || query < next))
+            name = g_strndup (path, query - path);
+        else if (next)
+            name = g_strndup (path, next - path);
+        else
+            name = g_strdup (path);
+        colon = strchr (name, ':');
+        if (colon)
+        {
+            colon[0] = '\0';
+            xmlNs *nns = sch_lookup_ns (instance, schema, name, flags, false);
+            if (!nns)
+            {
+                /* No namespace found assume the node is supposed to have a colon in it */
+                colon[0] = ':';
+            }
+            else
+            {
+                /* We found a namespace. Remove the prefix */
+                char *_name = name;
+                name = g_strdup (colon + 1);
+                free (_name);
+                ns = nns;
+            }
+        }
+
+        if (query && next && query < next)
+            next = NULL;
+
+        pred = strchr (name, '[');
+        if (pred)
+        {
+            char *temp = g_strndup (name, pred - name);
+            pred = g_strdup (pred);
+            free (name);
+            name = temp;
+        }
+
+        if (schema && vschema && *vschema == NULL && sch_is_list (schema))
+        {
+            /* Check for a schema list that has a parent that has skipped down
+             * to the next schema level down without a list item selector */
+            sch_node *parent = sch_node_parent (schema);
+            if (parent)
+            {
+                GList *path_list = NULL;
+                char *__next = g_strdup_printf ("/%s", name);
+                bool found = sch_node_find_name (instance, ns, parent, __next, flags, &path_list);
+                g_list_free_full (path_list, g_free);
+                g_free (__next);
+
+                if (found)
+                {
+                    *vschema = parent;
+                    *x_type = XPATH_EVALUATE;
+                    goto exit;
+                }
+            }
+        }
+
+        /* Find schema node */
+        if (schema && sch_is_proxy (schema))
+        {
+            /* The schema containing the proxy node can have children */
+            sch_node *child = sch_ns_node_child (ns, schema, name);
+            if (!child)
+            {
+                is_proxy = sch_is_proxy (schema);
+            }
+        }
+
+        if (!schema || is_proxy)
+        {
+            schema = sch_get_root_schema (instance);
+            /* Detect change in namespace with the new schema */
+            colon = strchr (name, ':');
+            if (colon)
+            {
+                colon[0] = '\0';
+                xmlNs *nns = sch_lookup_ns (instance, schema, name, flags, false);
+                if (!nns)
+                {
+                    /* No namespace found assume the node is supposed to have a colon in it */
+                    colon[0] = ':';
+                }
+                else
+                {
+                    /* We found a namespace. Remove the prefix */
+                    char *_name = name;
+                    name = g_strdup (colon + 1);
+                    free (_name);
+                    ns = nns;
+                }
+            }
+        }
+
+        last_good_schema = schema;
+        schema = sch_ns_node_child (ns, schema, name);
+        if (schema == NULL && g_strcmp0 (name, "*") == 0)
+        {
+            GList *path_list = NULL;
+            bool found = sch_node_find_name (instance, ns, last_good_schema, next, flags, &path_list);
+
+            if (found)
+            {
+                GList *list;
+                int len = 0;
+                bool first = true;
+                for (list = g_list_first (path_list); list; list = g_list_next (list))
+                {
+                    len += strlen ((char *) list->data);
+                }
+
+                if (len)
+                {
+                    /* Note - the 64 bytes added to the length is to allow for extra slashes being added to the path */
+                    len += strlen (path) +  64;
+                    new_path = g_malloc0 (len);
+                    len = 0;
+                    /* Ammend the path with the new information. Note we drop the last list
+                     * item as it contains a duplicate star slash already in the path */
+                    for (list = g_list_first (path_list); list; list = g_list_next (list))
+                    {
+                        if (first)
+                        {
+                            g_free (name);
+                            name = (char *) list->data;
+                            first = false;
+                        }
+                        else
+                        {
+                            if (list->next)
+                                len += sprintf (new_path + len, "/%s", (char *) list->data);
+                            g_free (list->data);
+                        }
+                    }
+                    sprintf (new_path + len, "/%s", path);
+                    next = new_path;
+                }
+                g_list_free (path_list);
+                if (new_path)
+                    schema = sch_ns_node_child (ns, last_good_schema, name);
+            }
+        }
+
+        if (schema == NULL)
+        {
+            *x_type = XPATH_ERROR;
+            ERROR ("No schema match for %s%s%s\n", ns ? (char *) ns->prefix : "",
+                   ns ? ":" : "", name);
+            goto exit;
+        }
+
+        /* Create node */
+        if (depth == 0 || is_proxy)
+        {
+            if (ns && ns->prefix && !sch_ns_native (instance, ns))
+            {
+                if (is_proxy)
+                    rnode = APTERYX_NODE (NULL, g_strdup_printf ("%s:%s", ns->prefix, name));
+                else
+                    rnode = APTERYX_NODE (NULL, g_strdup_printf ("/%s:%s", ns->prefix, name));
+            }
+            else
+            {
+                if (is_proxy)
+                    rnode = APTERYX_NODE (NULL, g_strdup (name));
+                else
+                    rnode = APTERYX_NODE (NULL, g_strdup_printf ("/%s", name));
+            }
+            DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (rnode));
+        }
+        else
+        {
+            rnode = APTERYX_NODE (NULL, name);
+            name = NULL;
+        }
+        DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (rnode));
+
+        /* XPATH predicates */
+        if (pred && sch_is_list (schema))
+        {
+            char key[128 + 1];
+            char value[128 + 1];
+
+            schema = sch_node_child_first (schema);
+            if (sscanf (pred, "[%128[^=]='%128[^']']", key, value) == 2 ||
+                sscanf (pred, "[%128[^=]=\"%128[^\"]\"]", key, value) == 2) {
+                // TODO make sure this key is the list key
+                child = APTERYX_NODE (NULL, g_strdup (value));
+                g_node_prepend (rnode, child);
+                depth++;
+                DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
+                if (next)
+                {
+                    if (!sch_xpath_is_simple (next, x_type))
+                        next = NULL;
+                }
+
+                if (next)
+                {
+                    if (!sch_is_proxy (schema))
+                    {
+                        APTERYX_NODE (child, g_strdup (key));
+                    }
+                    depth++;
+                    DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
+                }
+            }
+            g_free (pred);
+        }
+        else if (equals && sch_is_list (schema))
+        {
+            child = APTERYX_NODE (NULL, g_strdup (equals));
+            g_node_prepend (rnode, child);
+            depth++;
+            DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (child));
+            g_free (equals);
+            schema = sch_node_child_first (schema);
+        }
+
+        if (next && !sch_xpath_is_simple (next, x_type))
+            next = NULL;
+
+        if (next)
+        {
+            node = _sch_xpath_to_gnode (instance, &schema, vschema, ns, next, flags, depth + 1, x_type);
+            if (!node)
+            {
+                if (*x_type == XPATH_EVALUATE)
+                    goto exit;
+
+                if (!vschema || !*vschema)
+                {
+                    free ((void *)rnode->data);
+                    g_node_destroy (rnode);
+                    rnode = NULL;
+                }
+                goto exit;
+            }
+            g_node_prepend (child ? : rnode, node);
+        }
+    }
+
+exit:
+    if (rschema)
+        *rschema = schema;
+    free (name);
+    g_free (new_path);
+    return rnode;
+}
+
+GNode *
+sch_xpath_to_gnode (sch_instance * instance, sch_node * schema, const char *path, int flags, sch_node ** rschema, xpath_type *x_type, char *schema_path)
+{
+    GNode *node;
+    char *ptr;
+    int len;
+    char *_path = NULL;
+    char *sch_path = NULL;
+    sch_node *vschema = NULL;
+    gchar **path_split;
+    int count;
+
+    if (path[0] != '/')
+    {
+        *x_type = XPATH_ERROR;
+        return NULL;
+    }
+    len = strlen (path);
+    if (len == 1)
+    {
+        sch_path = g_strdup (path);
+    }
+
+    /* Check for // syntax */
+    if (path[1] == '/' || path[1] == '*')
+    {
+        if (schema_path)
+        {
+            *x_type = XPATH_EVALUATE;
+        }
+        else
+        {
+            /* Trying to do a // query but we have no namespace. This will not work */
+            *x_type = XPATH_ERROR;
+            return NULL;
+        }
+    }
+
+    ptr = strchr (path + 1, '/');
+    if (ptr == path + 1 && schema_path && strstr (path, schema_path) != path)
+        sch_path = g_strdup_printf ("/%s/%s", schema_path, ptr);
+    else
+        sch_path = g_strdup (path);
+
+    path_split = g_strsplit (sch_path, "/", 0);
+    count = g_strv_length (path_split);
+    if (count)
+    {
+        if (sch_xpath_process_relatives (path_split, &count))
+        {
+            _path = g_strjoinv ("/", path_split);
+            node = _sch_xpath_to_gnode (instance, rschema, &vschema, NULL, _path, flags, 0, x_type);
+        }
+        else
+        {
+            *x_type = XPATH_ERROR;
+        }
+    }
+    else
+    {
+        *x_type = XPATH_ERROR;
+    }
+
+    g_strfreev (path_split);
+    g_free (_path);
+    g_free (sch_path);
+
+    return node;
+}
+
+static void
+_sch_xpath_set_ns_path (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNode * xml,
+                        int depth, xmlXPathContext *xpath_ctx, gchar **path_split, int count)
+{
+    char *name = (char *) xml->name;
+    xmlNode *child;
+    bool is_proxy = false;
+
+    if (depth > count)
+        return;
+
+    /* Detect change in namespace */
+    if (xml->ns && xml->ns->href)
+        sch_xpath_change_ns (instance, schema, ns, xml, depth, xpath_ctx, path_split, count);
+
+    /* Find schema node */
+    if (schema && sch_is_proxy (schema))
+    {
+        /* The schema containing the proxy node can have children */
+        sch_node *child = sch_ns_node_child (ns, schema, name);
+        if (!child)
+            is_proxy = sch_is_proxy (schema);
+    }
+
+    if (!schema || is_proxy)
+    {
+        schema = sch_get_root_schema (instance);
+        /* Detect change in namespace with the new schema */
+        schema = sch_ns_node_child (ns, schema, name);
+        if (schema && is_proxy)
+        {
+            sch_xpath_change_ns (instance, schema, ns, xml, depth, xpath_ctx, path_split, count);
+        }
+    }
+    else
+        schema = sch_ns_node_child (ns, schema, name);
+
+    if (schema == NULL)
+        return;
+
+    if (sch_is_leaf_list (schema) || sch_is_list (schema))
+        schema = sch_node_child_first (schema);
+
+    for (child = xmlFirstElementChild (xml); child; child = xmlNextElementSibling (child))
+    {
+        _sch_xpath_set_ns_path (instance, schema, ns, child, depth + 1, xpath_ctx, path_split, count);
+    }
+}
+
+char *
+sch_xpath_set_ns_path (sch_instance * instance, sch_node * schema, xmlNode * xml, xmlXPathContext *xpath_ctx, char *path)
+{
+    gchar **path_split;
+    char *xpath;
+    char *colon;
+    char *curr_prefix = NULL;
+    int count;
+    int i;
+
+    path_split = g_strsplit (path, "/", 0);
+    count = g_strv_length (path_split);
+    if (count)
+    {
+        /* remove any existing prefixes on path members */
+        for (i = 0; i < count; i++)
+        {
+            colon = strchr (path_split[i], ':');
+            if (colon && strlen (colon) > 1)
+            {
+                if (*(colon + 1) == ':')
+                    continue;
+                if (g_strcmp0 (curr_prefix, colon + 1))
+                {
+                    curr_prefix = colon + 1;
+                }
+                else
+                {
+                    char *tmp = g_strdup (colon + 1);
+                    g_free (path_split[i]);
+                    path_split[i] = tmp;
+                }
+            }
+        }
+        _sch_xpath_set_ns_path (instance, schema, NULL, xml, 0, xpath_ctx, path_split, count);
+    }
+    xpath = g_strjoinv ("/", path_split);
+    g_strfreev (path_split);
+    return xpath;
 }

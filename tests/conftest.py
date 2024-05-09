@@ -1,6 +1,7 @@
 import os
 import pytest
 from ncclient import manager
+from ncclient.operations import RPCError
 from lxml import etree
 import subprocess
 
@@ -180,6 +181,10 @@ def apteryx_traverse(path):
     return subprocess.check_output("%s -t %s%s" % (APTERYX, APTERYX_URL, path), shell=True).strip().decode('utf-8')
 
 
+def apteryx_proxy(path, url):
+    assert subprocess.check_output('%s -x %s%s "%s"' % (APTERYX, APTERYX_URL, path, url), shell=True).strip().decode('utf-8') != "Failed"
+
+
 @pytest.fixture(autouse=True)
 def run_around_tests():
     # Before test
@@ -263,5 +268,40 @@ def _get_test_with_defaults_and_filter(f_value, w_d_value, expected=None, f_type
     if expected:
         expected = toXML(expected)
         assert diffXML(xml, expected) is None
+    m.close_session()
+    return xml
+
+
+def response_error_check(err, expect_err):
+    assert err is not None
+    if "message" in expect_err:
+        assert err.message == expect_err["message"]
+
+
+def _get_test_with_filter_expect_error(f_value, expected=None, f_ns=None, f_type='subtree'):
+    """
+    Perform a get with the given filter, which can be of type 'subtree' or 'xpath'. If expectede
+    respose is given, assert that it was the same as the response from the get. Return the response
+    so the caller can perform its own tests.
+    """
+    xml = None
+    m = connect()
+    try:
+        if f_ns is not None:
+            filter_str = '<nc:filter type="xpath" xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0" %s select="%s" />' % (f_ns, f_value)
+            print("Filter_str = ", filter_str)
+            xml = m.get(filter=filter_str).data
+        else:
+            xml = m.get(filter=(f_type, f_value)).data
+            print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
+    except RPCError as err:
+        print(err)
+        assert expected is not None
+        response_error_check(err, expected)
+    else:
+        print(xml)
+        if expected:
+            expected = toXML(expected)
+            assert diffXML(xml, expected) is None
     m.close_session()
     return xml

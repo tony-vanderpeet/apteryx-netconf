@@ -1,5 +1,5 @@
 from lxml import etree
-from conftest import connect, _get_test_with_defaults_and_filter
+from conftest import connect, _get_test_with_defaults_and_filter, apteryx_set, apteryx_proxy
 from test_edit_config import _edit_config_test
 
 
@@ -437,6 +437,30 @@ def test_with_default_report_all_on_empty_branch():
       </animal>
     </animals>
   </test>
+</nc:data>
+    """
+    _get_test_with_defaults_and_filter(select, with_defaults, expected)
+
+
+def test_with_default_report_all_proxy_get_leaf():
+    apteryx_set("/logical-elements/logical-element/loop/name", "loopy")
+    apteryx_set("/logical-elements/logical-element/loop/root", "root")
+    apteryx_set("/apteryx/sockets/E18FE205",  "tcp://127.0.0.1:9999")
+    apteryx_proxy("/logical-elements/logical-element/loopy/*", "tcp://127.0.0.1:9999")
+    with_defaults = 'report-all'
+    select = '<logical-elements><logical-element><name>loopy</name><interfaces><interface><name>eth0</name><status/></interface></interfaces></logical-element></logical-elements>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-elements xmlns="http://example.com/ns/logical-elements">
+    <logical-element>
+      <interfaces xmlns="http://example.com/ns/interfaces">
+        <interface>
+          <name>eth0</name>
+          <status>up</status>
+        </interface>
+      </interfaces>
+    </logical-element>
+  </logical-elements>
 </nc:data>
     """
     _get_test_with_defaults_and_filter(select, with_defaults, expected)
