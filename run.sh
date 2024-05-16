@@ -67,7 +67,6 @@ fi
 rm -f $BUILD/etc/apteryx/schema/*
 cp $BUILD/apteryx-xml/models/*.xml $BUILD/etc/apteryx/schema/
 cp $BUILD/apteryx-xml/models/*.map $BUILD/etc/apteryx/schema/
-cp $BUILD/apteryx-xml/models/*.xlat $BUILD/etc/apteryx/schema/
 
 # Check openssh
 if [ ! -d openssh ]; then

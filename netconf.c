@@ -1538,8 +1538,8 @@ merge_gnode_trees (GNode *tree1, GNode *tree2)
 
 static bool
 get_query_to_xml (struct netconf_session *session, xmlNode *rpc, GNode *query,
-                  GNode *orig_query, int rdepth, char *path, char **ns_href,
-                  char **ns_prefix, xpath_type x_type, void *xlat_data, int schflags,
+                  int rdepth, char *path, char **ns_href,
+                  char **ns_prefix, xpath_type x_type, int schflags,
                   bool is_subtree, bool is_filter, GList **xml_list)
 {
     GNode *tree = NULL;
@@ -1594,9 +1594,6 @@ get_query_to_xml (struct netconf_session *session, xmlNode *rpc, GNode *query,
 
     apteryx_free_tree (query);
 
-    if (xlat_data && tree)
-        tree = sch_translate_output (g_schema, tree, orig_query, schflags, xlat_data);
-
     /* Convert result to XML */
     xml = tree ? sch_gnode_to_xml (g_schema, NULL, tree, schflags) : NULL;
     apteryx_free_tree (tree);
@@ -1609,9 +1606,9 @@ get_query_to_xml (struct netconf_session *session, xmlNode *rpc, GNode *query,
 }
 
 static bool
-get_query_schema (struct netconf_session *session, xmlNode *rpc, GNode *query, GNode *orig_query,
+get_query_schema (struct netconf_session *session, xmlNode *rpc, GNode *query,
                   sch_node *qschema, char *path, char **ns_href, char **ns_prefix, xpath_type x_type,
-                  void *xlat_data, int schflags, bool is_filter, bool is_subtree, GList **xml_list)
+                  int schflags, bool is_filter, bool is_subtree, GList **xml_list)
 {
     GNode *qnode = NULL;
     int qdepth = 0;
@@ -1651,8 +1648,8 @@ get_query_schema (struct netconf_session *session, xmlNode *rpc, GNode *query, G
         }
     }
 
-    return get_query_to_xml (session, rpc, query, orig_query, qdepth, path, ns_href,
-                             ns_prefix, x_type, xlat_data, schflags, is_subtree, true, xml_list);
+    return get_query_to_xml (session, rpc, query, qdepth, path, ns_href,
+                             ns_prefix, x_type, schflags, is_subtree, true, xml_list);
 }
 
 static void
@@ -1674,12 +1671,10 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
     char *attr;
     xmlNode *tnode;
     GNode *query = NULL;
-    GNode *orig_query = NULL;
     gchar **split;
     sch_xml_to_gnode_parms parms;
     sch_node *qschema = NULL;
     bool is_filter = false;
-    void *xlat_data = NULL;
     int i;
     int count;
 
@@ -1734,7 +1729,6 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
             {
                 char *path = g_strstrip (split[i]);
                 qschema = NULL;
-                xlat_data = NULL;
                 schflags |= SCH_F_XPATH;
                 xpath_type x_type;
                 if (ns_prefix)
@@ -1770,11 +1764,6 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     return -1;
                 }
 
-                if (query)
-                    orig_query = sch_translate_copy_query (query);
-
-                query = sch_translate_input (g_schema, query, schflags, &xlat_data, NULL);
-
                 if (qschema)
                 {
                     if (sch_is_leaf (qschema) && !sch_is_readable (qschema))
@@ -1784,24 +1773,22 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                         *ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_OPR_NOT_SUPPORTED, NC_ERR_TYPE_APP,
                                                     error_msg, NULL, NULL, true);
                         g_free (error_msg);
-                        apteryx_free_tree (orig_query);
                         apteryx_free_tree (query);
                         cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
                         return -1;
                     }
 
-                    if (!get_query_schema (session, rpc, query, orig_query, qschema, path, &ns_href, &ns_prefix,
-                                           x_type, xlat_data, schflags, is_filter, false, xml_list))
+                    if (!get_query_schema (session, rpc, query, qschema, path, &ns_href, &ns_prefix,
+                                           x_type, schflags, is_filter, false, xml_list))
                     {
-                        apteryx_free_tree (orig_query);
                         cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
                         return -1;
                     }
                 }
                 else if (!query && x_type == XPATH_EVALUATE)
                 {
-                    if (!get_query_to_xml (session, rpc, query, orig_query, 0, path, &ns_href,
-                                           &ns_prefix, x_type, xlat_data, schflags, false, true, xml_list))
+                    if (!get_query_to_xml (session, rpc, query, 0, path, &ns_href,
+                                           &ns_prefix, x_type, schflags, false, true, xml_list))
                     {
                         cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
                         return -1;
@@ -1814,11 +1801,6 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                                                 "XPATH: malformed query", NULL, NULL, true);
                     cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
                     return -1;
-                }
-                if (orig_query)
-                {
-                    apteryx_free_tree (orig_query);
-                    orig_query = NULL;
                 }
             }
             g_free (ns_href);
@@ -1838,7 +1820,6 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
             for (tnode = xmlFirstElementChild (node); tnode; tnode = xmlNextElementSibling (tnode))
             {
                 qschema = NULL;
-                xlat_data = NULL;
                 parms =
                     sch_xml_to_gnode (g_schema, NULL, tnode, schflags | SCH_F_STRIP_KEY, "merge",
                                       false, &qschema);
@@ -1854,8 +1835,6 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     netconf_global_stats.session_totals.in_bad_rpcs++;
                     return -1;
                 }
-                orig_query = sch_translate_copy_query (query);
-                query = sch_translate_input (g_schema, query, schflags, &xlat_data, NULL);
 
                 if (qschema)
                 {
@@ -1867,25 +1846,17 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                                                     error_msg, NULL, NULL, true);
                         g_free (error_msg);
                         free (attr);
-                        apteryx_free_tree (orig_query);
                         apteryx_free_tree (query);
                         return -1;
                     }
-                    if (!get_query_schema (session, rpc, query, orig_query, qschema, NULL, NULL, NULL, XPATH_NONE,
-                                           xlat_data, schflags, is_filter, true, xml_list))
+                    if (!get_query_schema (session, rpc, query, qschema, NULL, NULL, NULL, XPATH_NONE,
+                                           schflags, is_filter, true, xml_list))
                     {
                         free (attr);
                         session->counters.in_bad_rpcs++;
                         netconf_global_stats.session_totals.in_bad_rpcs++;
-                        apteryx_free_tree (orig_query);
                         return -1;
                     }
-                }
-
-                if (orig_query)
-                {
-                    apteryx_free_tree (orig_query);
-                    orig_query = NULL;
                 }
             }
         }
@@ -1986,8 +1957,8 @@ handle_get (struct netconf_session *session, xmlNode * rpc, gboolean config_only
     /* Catch for get without filter */
     if (!filter_seen && !xml_list)
     {
-        if (!get_query_to_xml (session, rpc, NULL, NULL, 0, NULL, NULL, NULL,
-                               XPATH_NONE, NULL, schflags, false, false, &xml_list))
+        if (!get_query_to_xml (session, rpc, NULL, 0, NULL, NULL, NULL,
+                               XPATH_NONE, schflags, false, false, &xml_list))
         {
             session->counters.in_bad_rpcs++;
             netconf_global_stats.session_totals.in_bad_rpcs++;
@@ -2104,7 +2075,6 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     GNode *tree = NULL;
     sch_xml_to_gnode_parms parms;
     sch_node *qschema = NULL;
-    void *xlat_data = NULL;
     int schflags = 0;
     GList *iter;
     bool ret = false;
@@ -2162,7 +2132,6 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, def_op,
                           true, &qschema);
     tree = sch_parm_tree (parms);
-    tree = sch_translate_input (g_schema, tree, schflags, &xlat_data, NULL);
 
     nc_error_parms error_parms = sch_parm_error (parms);
 
