@@ -32,14 +32,6 @@
 
 static sch_instance *g_schema = NULL;
 
-typedef enum
-{
-    XPATH_NONE,
-    XPATH_SIMPLE,
-    XPATH_EVALUATE,
-    XPATH_ERROR,
-} xpath_type;
-
 struct netconf_session
 {
     int fd;
@@ -1021,166 +1013,6 @@ xpath_tree_add (GHashTable *node_table, xmlNode *node)
     }
 }
 
-static char *
-prepare_xpath_eval_path (char *path, char *ns_prefix)
-{
-    char *xpath;
-    char *new_path = NULL;
-    char *colon;
-
-    if (path[0] == '/')
-    {
-        if (strlen (path) > 1 && path[1] != '/')
-        {
-            colon = strchr (path + 1, ':');
-            if (!colon && ns_prefix)
-            {
-                new_path = g_strdup_printf ("/%s:%s", ns_prefix, path + 1);
-                path = new_path;
-            }
-            else if (colon)
-            {
-                /* Remove redundant namespace directives in each of the child nodes */
-                gchar **split = g_strsplit (path, "/", -1);
-                int count = g_strv_length (split);
-                int i;
-                char *prefix = NULL;
-                char *n_prefix = NULL;
-                bool change = false;
-
-                for (i = 0; i < count; i++)
-                {
-                    if (i == 1)
-                    {
-                        colon = strchr (split[i], ':');
-                        if (!colon)
-                            break;
-                        prefix = g_strndup (split[i], colon - split[i]);
-                        if (!prefix)
-                            break;
-                    }
-                    else
-                    {
-                        colon = strchr (split[i], ':');
-                        if (!colon)
-                            continue;
-
-                        /* Check for XPATH keyword operators */
-                        if (strlen (colon) > 1 && *(colon + 1) == ':')
-                            continue;
-
-                        n_prefix = g_strndup (split[i], colon - split[i]);
-                        if (!n_prefix)
-                            continue;
-
-                        if (g_strcmp0 (prefix, n_prefix) == 0 && strlen (colon) > 1)
-                        {
-                            char *tmp = split[i];
-                            split[i] = g_strdup (colon + 1);
-                            g_free (tmp);
-                            change = true;
-                        }
-                        else
-                        {
-                            /* Shifting to a new namespace via augmentation */
-                            g_free (prefix);
-                            prefix = n_prefix;
-                            n_prefix = NULL;
-                        }
-                    }
-                }
-
-                g_free (prefix);
-                g_free (n_prefix);
-
-                if (change)
-                {
-                    g_free (new_path);
-                    new_path = g_strjoinv ("/", split);
-                    path = new_path;
-                }
-                g_strfreev(split);
-            }
-        }
-    }
-
-    xpath = g_strdup (path);
-    g_free (new_path);
-    return xpath;
-}
-
-void
-xpath_set_namespace (char *path, char **ns_href, char **ns_prefix, xmlDoc *doc,
-                     xmlNode *xml, xmlXPathContext *xpath_ctx)
-{
-    char *href = NULL;
-    char *prefix = NULL;
-    char *next;
-    char *top_node;
-
-    if (path && strlen (path) > 1 && (!*ns_href || !*ns_prefix))
-    {
-        if (xml->ns)
-        {
-            if (xml->ns->href)
-            {
-                href = g_strdup ((char *) xml->ns->href);
-                if (*ns_href)
-                    g_free (*ns_href);
-                *ns_href = href;
-            }
-            if (xml->ns->prefix)
-            {
-                prefix = g_strdup ((char *) xml->ns->prefix);
-                if (*ns_prefix)
-                    g_free (*ns_prefix);
-                *ns_prefix = prefix;
-            }
-        }
-        if (!*ns_href || !*ns_prefix)
-        {
-            if (path[0] == '/')
-            {
-                next = strchr (path + 1, '/');
-                top_node = g_strndup (path + 1, next - path - 1);
-                sch_node *lookup = sch_lookup (g_schema, top_node);
-                if (lookup)
-                {
-                    href = sch_namespace (lookup);
-                    prefix = sch_prefix (lookup);
-                }
-
-                if (href && prefix)
-                {
-                    g_free (*ns_href);
-                    *ns_href = href;
-                    g_free (*ns_prefix);
-                    *ns_prefix = prefix;
-                }
-                else
-                {
-                    g_free (href);
-                    g_free (prefix);
-
-                    /* If we don't have a prefix yet, try the path */
-                    if (!*ns_prefix)
-                    {
-                        char *colon;
-
-                        colon = strchr (path + 1, ':');
-                        if (colon)
-                            *ns_prefix = g_strndup (path +1, colon - path - 1);
-                    }
-                }
-                g_free (top_node);
-            }
-        }
-    }
-
-    if (*ns_href && *ns_prefix)
-        xmlXPathRegisterNs (xpath_ctx,  BAD_CAST *ns_prefix, BAD_CAST *ns_href);
-}
-
 static bool
 xpath_evaluate (struct netconf_session *session, xmlNode *rpc, char *path, char **ns_href, char **ns_prefix,
                 xmlNode *xml, int schflags, GList **xml_list)
@@ -1201,16 +1033,15 @@ xpath_evaluate (struct netconf_session *session, xmlNode *rpc, char *path, char 
     xpath_ctx = xmlXPathNewContext (doc);
     if (xpath_ctx)
     {
-        xpath_set_namespace (path, ns_href, ns_prefix, doc, xml, xpath_ctx);
-        xpath = prepare_xpath_eval_path (path, *ns_prefix);
+        xpath = sch_xpath_set_ns_path (g_schema, NULL, xml, xpath_ctx, path);
         xpath_obj = xmlXPathEvalExpression (BAD_CAST xpath, xpath_ctx);
-
         if (xpath_obj)
         {
             xmlNode *cur;
             int size;
             int i;
             int max_depth = 0;
+
             xmlNodeSet *nodes = xpath_obj->nodesetval;
             if (nodes)
             {
@@ -1303,133 +1134,6 @@ xpath_evaluate (struct netconf_session *session, xmlNode *rpc, char *path, char 
     xmlFreeDoc (doc);
 
     return status == 0;
-}
-
-static char *
-process_relative_path (char *path, char *ptr)
-{
-    char *pt;
-    char *sub;
-    char *old_sub = NULL;
-    int count = 0;
-    int i;
-
-    pt = path;
-    while ((sub = strstr (pt, "/..")))
-    {
-        if (!old_sub || old_sub + 3 == sub)
-        {
-            count++;
-            old_sub = sub;
-            pt = sub + 3;
-        }
-        else
-            break;
-    }
-
-    pt = ptr - 2;
-    for (i = 0; i < count; i++)
-    {
-        while (pt > path && *pt != '/')
-            pt--;
-
-        if (i < count - 1 && pt > path && *pt == '/')
-            pt--;
-    }
-
-    if (i == count && pt > path && *pt == '/')
-    {
-        return pt;
-    }
-
-    ptr--;
-    return ptr;
-}
-
-static char *
-find_first_non_path (char *path)
-{
-    char *ptr = path;
-    bool slash = false;
-    int len = strlen (path);
-    int i;
-
-    for (i = 0; i < len; i++)
-    {
-        if (*ptr == '*' || *ptr == '[' || *ptr == '@' || *ptr == '.')
-        {
-            /* Handle relative path /.. */
-            if (slash && *ptr == '.' && *(ptr + 1) == '.')
-                return process_relative_path (path, ptr);
-
-            if (slash)
-                ptr--;
-
-            return ptr;
-        }
-
-        if (*ptr == '/')
-        {
-            if (slash)
-                return ptr - 1;
-
-            if (strncmp (ptr, "/node(", 6) == 0)
-                return ptr;
-
-            slash = true;
-        }
-        else
-            slash = false;
-        ptr++;
-    }
-    return NULL;
-}
-
-static xpath_type
-prepare_xpath_query_path (char *path, char *schema_path, char **sch_path)
-{
-    char *non_path = NULL;
-    char *ptr;
-    int len;
-
-    *sch_path = NULL;
-    if (path[0] != '/')
-    {
-        return XPATH_ERROR;
-    }
-    len = strlen (path);
-    if (len == 1)
-    {
-        *sch_path = g_strdup (path);
-        return XPATH_SIMPLE;
-    }
-
-    /* Check for // syntax */
-    if (path[1] == '/' || path[1] == '*')
-    {
-        if (schema_path)
-        {
-            *sch_path = g_strdup_printf ("/%s", (char *) schema_path);
-            return XPATH_EVALUATE;
-        }
-        /* Trying to do a // query but we have no namespace. This will not work */
-        return XPATH_ERROR;
-    }
-
-    ptr = strchr (path + 1, '/');
-    if (ptr && schema_path && strstr (path, schema_path) != path)
-        *sch_path = g_strdup_printf ("/%s%s", schema_path, ptr);
-    else
-        *sch_path = g_strdup (path);
-
-    non_path = find_first_non_path (*sch_path);
-    if (non_path)
-    {
-        *non_path = '\0';
-        return XPATH_EVALUATE;
-    }
-
-    return XPATH_SIMPLE;
 }
 
 static char *
@@ -1590,7 +1294,7 @@ get_query_to_xml (struct netconf_session *session, xmlNode *rpc, GNode *query,
     }
 
     if (tree && (schflags & SCH_F_TRIM_DEFAULTS))
-            sch_traverse_tree (g_schema, NULL, tree, schflags | SCH_F_FILTER_RDEPTH, rdepth);
+        sch_traverse_tree (g_schema, NULL, tree, schflags | SCH_F_FILTER_RDEPTH, rdepth);
 
     apteryx_free_tree (query);
 
@@ -1709,7 +1413,6 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
             char *schema_path = NULL;
             char *ns_href = NULL;
             char *ns_prefix = NULL;
-            char *sch_path = NULL;
 
             free (attr);
             attr = (char *) xmlGetProp (node, BAD_CAST "select");
@@ -1730,7 +1433,7 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                 char *path = g_strstrip (split[i]);
                 qschema = NULL;
                 schflags |= SCH_F_XPATH;
-                xpath_type x_type;
+                xpath_type x_type = XPATH_SIMPLE;
                 if (ns_prefix)
                 {
                     g_free (ns_prefix);
@@ -1748,13 +1451,10 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     xmlNode *get = xmlFirstElementChild (rpc);
                     schema_path = check_namespace_set (get, &ns_href, &ns_prefix);
                 }
-
-                x_type = prepare_xpath_query_path (path, schema_path, &sch_path);
+                query = sch_xpath_to_gnode (g_schema, NULL, path, schflags | SCH_F_XPATH,
+                                            &qschema, &x_type, schema_path);
                 g_free (schema_path);
-                if (x_type != XPATH_ERROR)
-                    query = sch_path_to_gnode (g_schema, NULL, sch_path, schflags | SCH_F_XPATH,
-                                                &qschema);
-                g_free (sch_path);
+
                 if (x_type == XPATH_ERROR || (!query && x_type == XPATH_SIMPLE))
                 {
                     VERBOSE ("XPATH: malformed filter\n");

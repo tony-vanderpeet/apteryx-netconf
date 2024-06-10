@@ -29,6 +29,10 @@
 #include <syslog.h>
 #include <apteryx.h>
 #include <libxml/tree.h>
+#define APTERYX_XML_LIBXML2
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
+#include <libxml/debugXML.h>
 
 /* Debug */
 extern gboolean apteryx_netconf_debug;
@@ -52,7 +56,7 @@ extern gboolean apteryx_netconf_verbose;
     }
 #define ERROR(fmt, args...) \
     { \
-        syslog (LOG_CRIT, fmt, ## args); \
+        syslog (LOG_ERR, fmt, ## args); \
         fprintf (stderr, fmt, ## args); \
     }
 
@@ -159,6 +163,14 @@ typedef struct _nc_error_parms_s
     .msg  = g_string_new (NULL)                                 \
 };
 
+typedef enum
+{
+    XPATH_NONE,
+    XPATH_SIMPLE,
+    XPATH_EVALUATE,
+    XPATH_ERROR,
+} xpath_type;
+
 /* Schema */
 typedef struct _sch_instance sch_instance;
 typedef void sch_node;
@@ -173,5 +185,9 @@ GList *sch_parm_removes (sch_xml_to_gnode_parms parms);
 GList *sch_parm_creates (sch_xml_to_gnode_parms parms);
 GList *sch_parm_replaces (sch_xml_to_gnode_parms parms);
 void sch_parm_free (sch_xml_to_gnode_parms parms);
+GNode *sch_xpath_to_gnode (sch_instance * instance, sch_node * schema, const char *path, int flags,
+                           sch_node ** rschema, xpath_type *x_type, char *schema_path);
+char *sch_xpath_set_ns_path (sch_instance * instance, sch_node * schema, xmlNode * xml,
+                             xmlXPathContext *xpath_ctx, char *path);
 
 #endif /* _INTERNAL_H_ */
