@@ -28,7 +28,7 @@ gboolean apteryx_netconf_verbose = FALSE;
 static gboolean background = FALSE;
 static gchar *models_path = "./";
 static gchar *supported = NULL;
-static gchar *logging = NULL;
+static gchar *logging_arg = NULL;
 static gchar *unix_path = "/tmp/apteryx-netconf";
 static gchar *cp_cmd = NULL;
 static gchar *rm_cmd = NULL;
@@ -97,7 +97,7 @@ static GOptionEntry entries[] = {
      "Path to models(defaults to \"./\")", NULL},
     {"supported", 's', 0, G_OPTION_ARG_STRING, &supported,
      "Name of a file containing a list of supported models", NULL},
-    {"logging", 'l', 0, G_OPTION_ARG_STRING, &logging,
+    {"logging", 'l', 0, G_OPTION_ARG_STRING, &logging_arg,
      "Name of a file containing a list of events to log", NULL},
     {"unix", 'u', 0, G_OPTION_ARG_STRING, &unix_path,
      "Listen on unix socket (defaults to /tmp/apteryx-netconf.sock)", NULL},
@@ -134,10 +134,14 @@ main (int argc, char *argv[])
 
     /* Initialization */
     apteryx_init (apteryx_netconf_verbose);
-    if (!netconf_init (models_path, supported, logging, cp_cmd, rm_cmd))
+    if (!netconf_init (models_path, supported, cp_cmd, rm_cmd))
     {
         g_error ("Failed to load models from \"%s\"\n", models_path);
     }
+
+    /* Initialize logging */
+    if (logging_arg)
+        logging_init (models_path, logging_arg);
 
     /* Listen Socket */
     g_thread = g_thread_new ("netconf-accept", netconf_accept_thread, (gpointer) unix_path);
@@ -155,6 +159,10 @@ main (int argc, char *argv[])
     g_main_loop_run (g_loop);
 
     g_thread_unref (g_thread);
+
+    /* Cleanup logging */
+    if (logging_arg)
+        logging_shutdown ();
 
     /* Cleanup Unix socket */
     unlink (unix_path);

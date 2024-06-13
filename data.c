@@ -32,6 +32,7 @@ typedef struct _sch_xml_to_gnode_parms_s
     GList *out_removes;
     GList *out_creates;
     GList *out_replaces;
+    GList *out_merges;
 } _sch_xml_to_gnode_parms;
 
 static bool
@@ -728,6 +729,13 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                 {
                     node = APTERYX_NODE (tree, value);
                     DEBUG ("%*s%s = %s\n", depth * 2, " ", name, APTERYX_NAME (node));
+
+                    if (_parms->in_is_edit && (!sch_parent || !sch_is_list (sch_parent)))
+                    {
+                        _parms->out_merges =
+                            g_list_append (_parms->out_merges, g_strdup_printf ("%s/%s", new_xpath, value));
+                        DEBUG ("merge <%s>\n", new_xpath);
+                    }
                 }
             }
             else if (!_parms->in_is_edit)
@@ -837,6 +845,7 @@ sch_parms_init (sch_instance * instance, int flags, char * def_op, bool is_edit)
     _parms->out_removes = NULL;
     _parms->out_creates = NULL;
     _parms->out_replaces = NULL;
+    _parms->out_merges = NULL;
     return _parms;
 }
 
@@ -927,6 +936,18 @@ sch_parm_replaces (sch_xml_to_gnode_parms parms)
     return _parms->out_replaces;
 }
 
+GList *
+sch_parm_merges (sch_xml_to_gnode_parms parms)
+{
+    _sch_xml_to_gnode_parms *_parms = parms;
+
+    if (!_parms)
+    {
+        return NULL;
+    }
+    return _parms->out_merges;
+}
+
 void
 sch_parm_free (sch_xml_to_gnode_parms parms)
 {
@@ -938,6 +959,7 @@ sch_parm_free (sch_xml_to_gnode_parms parms)
         g_list_free_full (_parms->out_removes, g_free);
         g_list_free_full (_parms->out_creates, g_free);
         g_list_free_full (_parms->out_replaces, g_free);
+        g_list_free_full (_parms->out_merges, g_free);
         _parms->out_error.tag = 0;
         _parms->out_error.type = 0;
         g_string_free (_parms->out_error.msg, TRUE);

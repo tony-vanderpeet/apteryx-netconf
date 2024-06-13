@@ -1252,11 +1252,12 @@ get_query_to_xml (struct netconf_session *session, xmlNode *rpc, GNode *query,
 
     /* Query database */
     DEBUG ("NETCONF: GET %s\n", query ? APTERYX_NAME (query) : "/");
-    if ((netconf_logging_test_flag (LOG_GET) && !(schflags & SCH_F_CONFIG)) ||
-        (netconf_logging_test_flag (LOG_GET_CONFIG) && (schflags & SCH_F_CONFIG)))
+    if (((logging & LOG_GET) && !(schflags & SCH_F_CONFIG)) ||
+        ((logging & LOG_GET_CONFIG) && (schflags & SCH_F_CONFIG)))
     {
-        NOTICE ("%s: user:%s session-id:%d path:%s\n",
-                (schflags & SCH_F_CONFIG) ? "GET-CONFIG" : "GET", session->username, session->id,
+        NOTICE ("%s: %s@%s id:%d path:%s\n",
+                (schflags & SCH_F_CONFIG) ? "GET-CONFIG" : "GET",
+                session->username, session->rem_addr, session->id,
                 query ? APTERYX_NAME (query) : "/");
     }
 
@@ -1766,6 +1767,21 @@ _handle_default_operation (xmlNode *action, char **def_op_pt)
     return true;
 }
 
+static char *
+split_path_value (char *path)
+{
+    char *value = strrchr (path, '/');
+    if (value)
+    {
+        *value = '\0';
+        value++;
+    }
+    if (!value || strlen (value) == 0)
+    {
+        value = "";
+    }
+    return value;
+}
 
 static bool
 handle_edit (struct netconf_session *session, xmlNode * rpc)
@@ -1881,7 +1897,6 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     {
         apteryx_prune (iter->data);
     }
-    sch_parm_free (parms);
 
     //TODO - permissions
     //TODO - patterns
@@ -1892,12 +1907,42 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     {
         ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_OPR_FAILED, NC_ERR_TYPE_APP, NULL, NULL, NULL, true);
         apteryx_free_tree (tree);
+        sch_parm_free (parms);
         return ret;
     }
-    if (netconf_logging_test_flag (LOG_EDIT_CONFIG))
-        NOTICE ("EDIT-CONFIG: user:%s session-id:%d path:%s\n",
-                session->username, session->id, tree ? APTERYX_NAME (tree) : "/");
 
+    if (tree && (logging & LOG_EDIT_CONFIG))
+    {
+        char *value;
+
+        for (iter = sch_parm_deletes (parms); iter; iter = g_list_next (iter))
+        {
+            NOTICE ("EDIT-CONFIG: %s@%s id:%d delete:%s\n",
+                    session->username, session->rem_addr, session->id, (char *) iter->data);
+        }
+        for (iter = sch_parm_removes (parms); iter; iter = g_list_next (iter))
+        {
+            NOTICE ("EDIT-CONFIG: %s@%s id:%d remove:%s\n",
+                    session->username, session->rem_addr, session->id, (char *) iter->data);
+        }
+        /* Note replace is covered by an equivalent merge */
+        for (iter = sch_parm_creates (parms); iter; iter = g_list_next (iter))
+        {
+            value = split_path_value ((char *) iter->data);
+            NOTICE ("EDIT-CONFIG: %s@%s id:%d create:%s=%s\n",
+                    session->username, session->rem_addr, session->id,
+                    (char *) iter->data, value);
+        }
+        for (iter = sch_parm_merges (parms); iter; iter = g_list_next (iter))
+        {
+            value = split_path_value ((char *) iter->data);
+            NOTICE ("EDIT-CONFIG: %s@%s id:%d merge:%s=%s\n",
+                    session->username, session->rem_addr, session->id,
+                    (char *) iter->data, value);
+        }
+    }
+
+    sch_parm_free (parms);
     apteryx_free_tree (tree);
 
     /* Success */
@@ -1952,8 +1997,8 @@ handle_lock (struct netconf_session *session, xmlNode * rpc)
         g_free (error_msg);
         return ret;
     }
-    if (netconf_logging_test_flag (LOG_LOCK))
-        NOTICE ("LOCK: user:%s session-id:%d\n", session->username, session->id);
+    if ((logging & LOG_LOCK))
+        NOTICE ("LOCK: %s@%s id:%d\n", session->username, session->rem_addr, session->id);
 
     /* Success */
     session->counters.in_rpcs++;
@@ -2015,8 +2060,8 @@ handle_unlock (struct netconf_session *session, xmlNode * rpc)
     /* Unlock running datastore */
     reset_lock ();
 
-    if (netconf_logging_test_flag (LOG_UNLOCK))
-        NOTICE ("UNLOCK: user:%s session-id:%d\n", session->username, session->id);
+    if ((logging & LOG_UNLOCK))
+        NOTICE ("UNLOCK: %s@%s id:%d\n", session->username, session->rem_addr, session->id);
 
     /* Success */
     session->counters.in_rpcs++;
@@ -2078,9 +2123,10 @@ handle_kill_session (struct netconf_session *session, xmlNode * rpc)
 
     /* Shutdown session fd */
     VERBOSE ("NETCONF: session killed\n");
-    if (netconf_logging_test_flag (LOG_KILL_SESSION))
-        NOTICE ("KILL-SESSION: user:%s session-id:%d killed session user:%s: session-id:%d\n",
-                session->username, session->id, kill_session->username, kill_session->id);
+    if ((logging & LOG_KILL_SESSION))
+        NOTICE ("KILL-SESSION: %s@%s id:%d  killed session %s@%s id:%d\n",
+                session->username, session->rem_addr, session->id,
+                kill_session->username, kill_session->rem_addr, kill_session->id);
 
     shutdown (kill_session->fd, SHUT_RDWR);
 
@@ -2149,6 +2195,8 @@ add_session_data (struct netconf_session *session, uint32_t pid)
         session->login_time = g_date_time_format (now, "%Y-%m-%dT%H:%M:%SZ%:z");
         g_date_time_unref (now);
     }
+    else
+        session->rem_addr = g_strdup ("unknown");
 
 cleanup:
     g_free (contents);
@@ -2624,15 +2672,9 @@ netconf_handle_session (int fd)
     return NULL;
 }
 
-gboolean
-netconf_init (const char *path, const char *supported, const char *logging,
-              const char *cp, const char *rm)
+bool
+netconf_init (const char *path, const char *supported,  const char *cp, const char *rm)
 {
-    if (logging)
-    {
-        netconf_logging_init (path, logging);
-    }
-
     /* Load Data Models */
     g_schema = sch_load_with_model_list_filename (path, supported);
     if (!g_schema)
@@ -2663,6 +2705,4 @@ netconf_shutdown (void)
     /* Cleanup datamodels */
     if (g_schema)
         sch_free (g_schema);
-
-    netconf_logging_shutdown ();
 }
