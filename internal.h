@@ -97,15 +97,16 @@ extern GMainLoop *g_loop;
 
 /* Netconf routines */
 void netconf_close_open_sessions (void);
-gboolean netconf_init (const char *path, const char *supported, const char *logging,
-                       const char *cp, const char *rm);
+bool netconf_init (const char *path, const char *supported,
+                   const char *cp, const char *rm);
 void *netconf_handle_session (int fd);
 void netconf_shutdown (void);
 
 /* Logging routines */
-int netconf_logging_init (const char *path, const char *logging);
-void netconf_logging_shutdown (void);
-bool netconf_logging_test_flag (int flag);
+extern int logging;
+
+int logging_init (const char *path, const char *logging);
+void logging_shutdown (void);
 
 typedef void * sch_xml_to_gnode_parms;
 
@@ -184,6 +185,7 @@ GList *sch_parm_deletes (sch_xml_to_gnode_parms parms);
 GList *sch_parm_removes (sch_xml_to_gnode_parms parms);
 GList *sch_parm_creates (sch_xml_to_gnode_parms parms);
 GList *sch_parm_replaces (sch_xml_to_gnode_parms parms);
+GList *sch_parm_merges (sch_xml_to_gnode_parms parms);
 void sch_parm_free (sch_xml_to_gnode_parms parms);
 GNode *sch_xpath_to_gnode (sch_instance * instance, sch_node * schema, const char *path, int flags,
                            sch_node ** rschema, xpath_type *x_type, char *schema_path);
