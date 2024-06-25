@@ -1121,6 +1121,22 @@ xpath_evaluate (struct netconf_session *session, xmlNode *rpc, char *path, char 
         xml = NULL;
     }
 
+    /* Clear the reference to the query node maintained by the xmlXPathObject
+     * as a workaround to prevent an invalid read memory access inside the
+     * xmlXPathFreeObject routine
+     **/
+    if (xpath_obj && xpath_obj->nodesetval)
+    {
+        for (int i = 0; i < xpath_obj->nodesetval->nodeNr; i++)
+        {
+            if ((xpath_obj->nodesetval->nodeTab[i] != NULL) &&
+                    (xpath_obj->nodesetval->nodeTab[i]->type == XML_NAMESPACE_DECL))
+            {
+                xpath_obj->nodesetval->nodeTab[i]->_private = NULL;
+            }
+        }
+    }
+
     xmlXPathFreeObject(xpath_obj);
     xmlXPathFreeContext(xpath_ctx);
 

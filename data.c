@@ -423,7 +423,6 @@ _operation_ok (_sch_xml_to_gnode_parms *_parms, xmlNode *xml, char *curr_op, cha
         }
         else
         {
-            g_free (attr);
             _parms->out_error.tag = NC_ERR_TAG_UNKNOWN_ATTR;
             _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
             g_hash_table_insert (_parms->out_error.info, "bad-element", g_strdup ("operation"));
@@ -1366,7 +1365,7 @@ exit:
 GNode *
 sch_xpath_to_gnode (sch_instance * instance, sch_node * schema, const char *path, int flags, sch_node ** rschema, xpath_type *x_type, char *schema_path)
 {
-    GNode *node;
+    GNode *node = NULL;
     char *ptr;
     int len;
     char *_path = NULL;
