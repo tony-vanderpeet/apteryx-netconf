@@ -1447,7 +1447,14 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
             count = g_strv_length (split);
             for (i = 0; i < count; i++)
             {
-                char *path = g_strstrip (split[i]);
+                GString *gpath;
+                char *path;
+
+                /* Remove all instances of "child::" */
+                gpath = g_string_new (g_strstrip (split[i]));
+                g_string_replace (gpath, "child::", "", 0);
+                path = g_string_free (gpath, false);
+
                 qschema = NULL;
                 schflags |= SCH_F_XPATH;
                 xpath_type x_type = XPATH_SIMPLE;
