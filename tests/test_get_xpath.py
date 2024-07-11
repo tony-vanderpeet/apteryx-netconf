@@ -19,6 +19,21 @@ def test_get_xpath_node():
     assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
 
 
+def test_get_xpath_node_with_child():
+    xpath = '/test/child::settings/child::debug'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test xmlns="http://test.com/ns/yang/testing">
+        <settings>
+            <debug>enable</debug>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}debug').text == 'enable'
+
+
 # No default or prefixed namespace - we use the internal default namespace
 def test_get_xpath_node_ns_none():
     xpath = '/test/settings/priority'
@@ -65,6 +80,36 @@ def test_get_xpath_node_ns_default():
     assert xml.find('./{*}test/{*}settings/{*}priority').text == '1'
 
 
+def test_get_xpath_node_ns_default_with_child_1():
+    xpath = '/child::test:test/settings/priority'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test xmlns="http://test.com/ns/yang/testing">
+        <settings>
+            <priority>1</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '1'
+
+
+def test_get_xpath_node_ns_default_with_child_2():
+    xpath = '/test:test/child::settings/priority'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test xmlns="http://test.com/ns/yang/testing">
+        <settings>
+            <priority>1</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '1'
+
+
 def test_get_xpath_node_ns_aug_default():
     xpath = '/test:test/settings/volume'
     expected = """
@@ -83,6 +128,21 @@ def test_get_xpath_node_ns_aug_default():
 # Prefixed namespace is not the internal default namespace
 def test_get_xpath_node_ns_other():
     xpath = '/t2:test/t2:settings/t2:priority'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test xmlns="http://test.com/ns/yang/testing-2">
+        <settings>
+            <priority>2</priority>
+        </settings>
+    </test>
+</nc:data>
+    """
+    xml = _get_test_with_filter(xpath, expected, f_type='xpath')
+    assert xml.find('./{*}test/{*}settings/{*}priority').text == '2'
+
+
+def test_get_xpath_node_ns_other_with_child():
+    xpath = '/child::t2:test/child::t2:settings/child::t2:priority'
     expected = """
 <nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
     <test xmlns="http://test.com/ns/yang/testing-2">
@@ -192,6 +252,23 @@ def test_get_xpath_list_select_one_trunk():
     _get_test_with_filter(xpath, expected, f_type='xpath')
 
 
+def test_get_xpath_list_select_one_trunk_with_child():
+    xpath = "/child::test/animals/animal[name='cat']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+            <animal>
+                <name>cat</name>
+                <type>big</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
 def test_get_xpath_list_select_one_parameter():
     xpath = "/test/animals/animal[name='cat']/type"
     expected = """
@@ -221,6 +298,48 @@ def test_get_xpath_list_select_one_parameter_double_quotes():
             </animal>
         </animals>
     </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_select_one_parameter_double_quotes_with_child():
+    xpath = "/child::test/animals/child::animal[name=\"cat\"]/type"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test xmlns="http://test.com/ns/yang/testing">
+        <animals>
+            <animal>
+                <name>cat</name>
+                <type>big</type>
+            </animal>
+        </animals>
+    </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_query_multi_with_child():
+    xpath = ("/test/child::animals/animal[name='cat']/type | /test/animals/child::animal[name='dog']/child::colour")
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type>big</type>
+      </animal>
+    </animals>
+  </test>
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(xpath, expected, f_type='xpath')
