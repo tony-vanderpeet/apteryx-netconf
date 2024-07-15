@@ -204,7 +204,7 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
     }
     if (!sch_is_readable (schema))
     {
-        ERROR ("Ignoring non-readable node %s%s%s\n",
+        DEBUG ("Ignoring non-readable node %s%s%s\n",
                ns ? sch_ns_prefix (instance, ns) : "", ns ? ":" : "", name);
         free (name);
         return NULL;
@@ -528,7 +528,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     schema = sch_ns_node_child (ns, schema, name);
     if (schema == NULL)
     {
-        ERROR ("No schema match for xml node %s%s%s\n",
+        DEBUG ("No schema match for xml node %s%s%s\n",
                ns ? sch_ns_prefix (instance, ns) : "", ns ? ":" : "", name);
         _parms->out_error.tag = NC_ERR_TAG_MALFORMED_MSG;
         _parms->out_error.type = NC_ERR_TYPE_RPC;
@@ -549,7 +549,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     /* Check operation, error tag set on exit from routine. */
     if (!_operation_ok (_parms, xml, curr_op, &new_op))
     {
-        ERROR ("Invalid operation\n");
+        DEBUG ("Invalid operation\n");
         free (new_xpath);
         free (name);
         return NULL;
@@ -786,7 +786,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
             {
                 apteryx_free_tree (tree);
                 tree = NULL;
-                ERROR ("recursive call failed: depth=%d\n", depth);
+                DEBUG ("recursive call failed: depth=%d\n", depth);
                 goto exit;
             }
             if (cn)
@@ -1258,7 +1258,7 @@ _sch_xpath_to_gnode (sch_instance * instance, sch_node ** rschema, sch_node ** v
         if (schema == NULL)
         {
             *x_type = XPATH_ERROR;
-            ERROR ("No schema match for %s%s%s\n", ns ? (char *) ns->prefix : "",
+            DEBUG ("No schema match for %s%s%s\n", ns ? (char *) ns->prefix : "",
                    ns ? ":" : "", name);
             goto exit;
         }
