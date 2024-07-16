@@ -319,8 +319,27 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
         if (!(flags & SCH_F_CONFIG) || sch_is_writable (schema))
         {
             char *value = g_strdup (APTERYX_VALUE (node) ? APTERYX_VALUE (node) : "");
+            xmlChar *idref_href;
+            xmlChar *idref_prefix;
+
             data = xmlNewNode (NULL, BAD_CAST name);
             value = sch_translate_to (schema, value);
+            idref_href = xmlGetProp ((xmlNode *) schema, BAD_CAST "idref_href");
+            if (idref_href)
+            {
+                char *temp = value;
+                idref_prefix = xmlGetProp ((xmlNode *) schema, BAD_CAST "idref_prefix");
+                if (idref_prefix)
+                {
+                    value = g_strdup_printf ("%s:%s", (char *) idref_prefix, value);
+                    xmlNs *nns = xmlNewNs (data, idref_href, NULL);
+                    xmlSetNs (data, nns);
+                    g_free (temp);
+                    xmlFree (idref_prefix);
+                }
+                xmlFree (idref_href);
+            }
+
             xmlNodeSetContent (data, (const xmlChar *) value);
             if (parent)
                 xmlAddChildList (parent, data);

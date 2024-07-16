@@ -215,7 +215,7 @@ def test_get_subtree_list_container():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
@@ -223,7 +223,7 @@ def test_get_subtree_list_container():
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -235,12 +235,12 @@ def test_get_subtree_list_container():
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <colour>grey</colour>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -262,7 +262,7 @@ def test_get_subtree_list_element():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
@@ -270,7 +270,7 @@ def test_get_subtree_list_element():
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -282,12 +282,12 @@ def test_get_subtree_list_element():
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <colour>grey</colour>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -337,22 +337,22 @@ def test_get_subtree_selection_multi():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
     </animals>
   </test>
@@ -369,7 +369,7 @@ def test_get_subtree_select_one_node():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -388,7 +388,7 @@ def test_get_subtree_select_one_with_colon():
         <animals>
             <animal>
                 <name>cat:ty</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -405,7 +405,7 @@ def test_get_subtree_select_one_elements():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -433,7 +433,7 @@ def test_get_subtree_select_multi():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
             <animal>
                 <name>dog</name>
@@ -454,7 +454,7 @@ def test_get_subtree_select_attr_named_only():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -471,7 +471,7 @@ def test_get_subtree_select_attr_named_element():
         <animals>
             <animal>
                 <name>mouse</name>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
         </animals>
     </test>
@@ -491,16 +491,16 @@ def test_get_subtree_select_no_key_other_field():
     <test xmlns="http://test.com/ns/yang/testing">
         <animals>
             <animal>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
             <animal>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
             <animal>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
             <animal>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -520,16 +520,16 @@ def test_get_subtree_select_no_key_other_field_value():
     <test xmlns="http://test.com/ns/yang/testing">
         <animals>
             <animal>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
             <animal>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
             <animal>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
             <animal>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -549,11 +549,11 @@ def test_get_subtree_select_key_other_field_value():
         <animals>
             <animal>
                 <name>hamster</name>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
             <animal>
                 <name>mouse</name>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
         </animals>
     </test>
@@ -582,7 +582,7 @@ def test_get_subtree_select_key_value_other_field_value():
         <animals>
             <animal>
                 <name>mouse</name>
-                <type>little</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             </animal>
         </animals>
     </test>
@@ -623,7 +623,7 @@ def test_get_multi_subtree_select_multi():
     xml = m.get(select).data
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert xml.find('./{*}test/{*}animals/{*}animal/{*}name').text == 'cat'
-    assert xml.find('./{*}test/{*}animals/{*}animal[{*}name="cat"]/{*}type').text == 'big'
+    assert xml.find('./{*}test/{*}animals/{*}animal[{*}name="cat"]/{*}type').text == 'a-types:big'
     assert xml.find('./{*}interfaces/{*}interface[{*}name="eth2"]/{*}mtu').text == '9000'
     m.close_session()
 
@@ -703,11 +703,11 @@ def test_get_subtree_select_key_value_other_field_exp_two_results():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
             <animal>
                 <name>parrot</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -748,7 +748,7 @@ def test_get_subtree_proxy_named_element():
         <animals>
           <animal>
             <name>mouse</name>
-            <type>little</type>
+            <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
           </animal>
         </animals>
       </test>

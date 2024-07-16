@@ -196,7 +196,7 @@ def test_get_xpath_list_trunk():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
@@ -204,7 +204,7 @@ def test_get_xpath_list_trunk():
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -216,12 +216,12 @@ def test_get_xpath_list_trunk():
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <colour>grey</colour>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -243,7 +243,7 @@ def test_get_xpath_list_select_one_trunk():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -260,7 +260,7 @@ def test_get_xpath_list_select_one_trunk_with_child():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -277,7 +277,7 @@ def test_get_xpath_list_select_one_parameter():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -294,7 +294,7 @@ def test_get_xpath_list_select_one_parameter_double_quotes():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -311,7 +311,7 @@ def test_get_xpath_list_select_one_parameter_double_quotes_with_child():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -328,7 +328,7 @@ def test_get_xpath_query_multi_with_child():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
     </animals>
   </test>
@@ -353,7 +353,7 @@ def test_get_xpath_query_multi():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
     </animals>
   </test>
@@ -378,7 +378,7 @@ def test_get_xpath_multi_select_multi():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
     </animals>
   </test>
@@ -544,7 +544,7 @@ def test_get_xpath_multi_xpath_select_multi():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
     </animals>
   </test>
@@ -568,7 +568,7 @@ def test_get_xpath_with_slash_slash():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
@@ -576,7 +576,7 @@ def test_get_xpath_with_slash_slash():
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -588,12 +588,12 @@ def test_get_xpath_with_slash_slash():
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <colour>grey</colour>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -616,7 +616,7 @@ def test_get_xpath_with_slash_slash_bad_ns():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
@@ -624,7 +624,7 @@ def test_get_xpath_with_slash_slash_bad_ns():
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -636,12 +636,12 @@ def test_get_xpath_with_slash_slash_bad_ns():
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <colour>grey</colour>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -733,7 +733,7 @@ def test_get_xpath_with_name_first():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
     </animals>
   </test>
@@ -750,7 +750,7 @@ def test_get_xpath_with_name_last():
     <animals>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -5863,7 +5863,7 @@ def test_get_xpath_relative_path():
         <animals>
             <animal>
                 <name>cat</name>
-                <type>big</type>
+                <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
             </animal>
         </animals>
     </test>
@@ -5880,7 +5880,7 @@ def test_get_xpath_relative_path_dot_dot():
     <animals>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -5937,7 +5937,7 @@ def test_get_xpath_relative_path_dot_dot_field_dot_dot():
     <animals>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -5962,7 +5962,7 @@ def test_get_xpath_relative_path_dot_dot_dot_dot():
     <animals>
       <animal>
         <name>cat</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
       </animal>
       <animal>
         <name>dog</name>
@@ -5970,7 +5970,7 @@ def test_get_xpath_relative_path_dot_dot_dot_dot():
       </animal>
       <animal>
         <name>hamster</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <food>
           <name>banana</name>
           <type>fruit</type>
@@ -5982,12 +5982,12 @@ def test_get_xpath_relative_path_dot_dot_dot_dot():
       </animal>
       <animal>
         <name>mouse</name>
-        <type>little</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
         <colour>grey</colour>
       </animal>
       <animal>
         <name>parrot</name>
-        <type>big</type>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
         <colour>blue</colour>
         <toys>
           <toy>puzzles</toy>
@@ -6102,7 +6102,7 @@ def test_get_xpath_list_entry_leaf_node_1():
         <animals>
           <animal>
             <name>hamster</name>
-            <type>little</type>
+            <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
             <food>
               <name>banana</name>
               <type>fruit</type>
@@ -6229,7 +6229,7 @@ def test_get_xpath_proxy_list_select_one_trunk():
         <animals>
           <animal>
             <name>cat</name>
-            <type>big</type>
+            <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
           </animal>
         </animals>
       </test>
