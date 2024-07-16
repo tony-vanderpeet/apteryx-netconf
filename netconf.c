@@ -1375,12 +1375,13 @@ get_query_schema (struct netconf_session *session, xmlNode *rpc, GNode *query,
 
 static void
 cleanup_on_xpath_error (struct netconf_session *session, char *attr, gchar **split,
-                        char *ns_href, char *ns_prefix)
+                        char *ns_href, char *ns_prefix, char *path)
 {
     free (attr);
     g_strfreev(split);
     g_free (ns_href);
     g_free (ns_prefix);
+    g_free (path);
     session->counters.in_bad_rpcs++;
     netconf_global_stats.session_totals.in_bad_rpcs++;
 }
@@ -1484,7 +1485,7 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     VERBOSE ("XPATH: malformed filter\n");
                     *ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_MALFORMED_MSG, NC_ERR_TYPE_RPC,
                                                 "XPATH: malformed filter", NULL, NULL, true);
-                    cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
+                    cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix, path);
                     return -1;
                 }
 
@@ -1498,14 +1499,14 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                                                     error_msg, NULL, NULL, true);
                         g_free (error_msg);
                         apteryx_free_tree (query);
-                        cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
+                        cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix, path);
                         return -1;
                     }
 
                     if (!get_query_schema (session, rpc, query, qschema, path, &ns_href, &ns_prefix,
                                            x_type, schflags, is_filter, false, xml_list))
                     {
-                        cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
+                        cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix, path);
                         return -1;
                     }
                 }
@@ -1514,7 +1515,7 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     if (!get_query_to_xml (session, rpc, query, 0, path, &ns_href,
                                            &ns_prefix, x_type, schflags, false, true, xml_list))
                     {
-                        cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
+                        cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix, path);
                         return -1;
                     }
                 }
@@ -1523,9 +1524,10 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                     VERBOSE ("XPATH: malformed query\n");
                     *ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_MALFORMED_MSG, NC_ERR_TYPE_RPC,
                                                 "XPATH: malformed query", NULL, NULL, true);
-                    cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix);
+                    cleanup_on_xpath_error (session, attr, split, ns_href, ns_prefix, path);
                     return -1;
                 }
+                g_free (path);
             }
             g_free (ns_href);
             g_free (ns_prefix);

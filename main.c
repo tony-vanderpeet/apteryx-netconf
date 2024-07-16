@@ -170,6 +170,7 @@ main (int argc, char *argv[])
     /* Shutdown */
     netconf_shutdown ();
     apteryx_shutdown ();
+    xmlCleanupParser ();
 
     return EXIT_SUCCESS;
 }
