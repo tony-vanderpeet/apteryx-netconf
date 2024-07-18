@@ -395,7 +395,7 @@ _operation_ok (_sch_xml_to_gnode_parms *_parms, xmlNode *xml, char *curr_op, cha
             _parms->out_error.tag = NC_ERR_TAG_BAD_ATTR;
             _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
             g_hash_table_insert (_parms->out_error.info, "bad-element", g_strdup ("operation"));
-            g_hash_table_insert (_parms->out_error.info, "bad-attribute", g_strdup (attr));
+            g_hash_table_insert (_parms->out_error.info, "bad-attribute", attr);
 
             return false;
         }
@@ -426,7 +426,7 @@ _operation_ok (_sch_xml_to_gnode_parms *_parms, xmlNode *xml, char *curr_op, cha
             _parms->out_error.tag = NC_ERR_TAG_UNKNOWN_ATTR;
             _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
             g_hash_table_insert (_parms->out_error.info, "bad-element", g_strdup ("operation"));
-            g_hash_table_insert (_parms->out_error.info, "bad-attribute", g_strdup (attr));
+            g_hash_table_insert (_parms->out_error.info, "bad-attribute", attr);
             return false;
         }
         g_free (attr);
