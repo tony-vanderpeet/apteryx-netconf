@@ -1818,6 +1818,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     sch_node *qschema = NULL;
     int schflags = 0;
     GList *iter;
+    char *exists;
     bool ret = false;
     char *def_op = NULL;
 
@@ -1926,9 +1927,23 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     //TODO - permissions
     //TODO - patterns
 
+    /* For a create make sure the data does not already exist */
+    for (iter = sch_parm_creates (parms); iter; iter = g_list_next (iter))
+    {
+        exists = apteryx_get ((char *) iter->data);
+        if (exists)
+        {
+            g_free (exists);
+            ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_DATA_EXISTS, NC_ERR_TYPE_APP, NULL, NULL, NULL, true);
+            apteryx_free_tree (tree);
+            sch_parm_free (parms);
+            return ret;
+        }
+    }
+
     /* Edit database */
-    DEBUG ("NETCONF: SET %s\n", tree ? APTERYX_NAME (tree) : "NULL");
-    if (tree && !apteryx_set_tree (tree))
+    DEBUG ("NETCONF: SET %s need_set %d\n", tree ? APTERYX_NAME (tree) : "NULL", sch_parm_need_tree_set (parms));
+    if (tree && sch_parm_need_tree_set (parms) && !apteryx_set_tree (tree))
     {
         ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_OPR_FAILED, NC_ERR_TYPE_APP, NULL, NULL, NULL, true);
         apteryx_free_tree (tree);
@@ -1936,7 +1951,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         return ret;
     }
 
-    if (tree && (logging & LOG_EDIT_CONFIG))
+    if ((logging & LOG_EDIT_CONFIG))
     {
         char *value;
 

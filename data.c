@@ -575,9 +575,15 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
             }
             else
             {
-                new_xpath = g_strdup_printf ("%s/%s/%s", old_xpath, key_value, key_value);
+                new_xpath = g_strdup_printf ("%s/%s", old_xpath, key_value);
                 node = APTERYX_NODE (tree, g_strdup (key_value));
                 node = APTERYX_NODE (node, g_strdup (key_value));
+                if (_parms->in_is_edit && g_strcmp0 (new_op, "merge") == 0)
+                {
+                    _parms->out_merges =
+                        g_list_append (_parms->out_merges, g_strdup(new_xpath));
+                    DEBUG ("merge <%s>\n", new_xpath);
+                }
             }
             g_free (key_value);
             g_free (old_xpath);
@@ -729,11 +735,20 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                     node = APTERYX_NODE (tree, value);
                     DEBUG ("%*s%s = %s\n", depth * 2, " ", name, APTERYX_NAME (node));
 
-                    if (_parms->in_is_edit && (!sch_parent || !sch_is_list (sch_parent)))
+                    if (_parms->in_is_edit)
                     {
-                        _parms->out_merges =
-                            g_list_append (_parms->out_merges, g_strdup_printf ("%s/%s", new_xpath, value));
-                        DEBUG ("merge <%s>\n", new_xpath);
+                        bool is_key = false;
+
+                        if (sch_parent && sch_is_list (sch_parent) &&
+                            (schema == sch_node_child_first (sch_node_child_first (sch_parent))))
+                            is_key = true;
+
+                        if (!is_key)
+                        {
+                            _parms->out_merges =
+                                g_list_append (_parms->out_merges, g_strdup_printf ("%s/%s", new_xpath, value));
+                            DEBUG ("merge <%s>\n", new_xpath);
+                        }
                     }
                 }
             }
@@ -945,6 +960,19 @@ sch_parm_merges (sch_xml_to_gnode_parms parms)
         return NULL;
     }
     return _parms->out_merges;
+}
+
+bool
+sch_parm_need_tree_set (sch_xml_to_gnode_parms parms)
+{
+    _sch_xml_to_gnode_parms *_parms = parms;
+
+    if (!_parms)
+    {
+        return false;
+    }
+    return _parms->out_replaces || _parms->out_merges ||
+           _parms->out_creates ? true : false;
 }
 
 void
