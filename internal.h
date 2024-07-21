@@ -186,6 +186,7 @@ GList *sch_parm_removes (sch_xml_to_gnode_parms parms);
 GList *sch_parm_creates (sch_xml_to_gnode_parms parms);
 GList *sch_parm_replaces (sch_xml_to_gnode_parms parms);
 GList *sch_parm_merges (sch_xml_to_gnode_parms parms);
+bool sch_parm_need_tree_set (sch_xml_to_gnode_parms parms);
 void sch_parm_free (sch_xml_to_gnode_parms parms);
 GNode *sch_xpath_to_gnode (sch_instance * instance, sch_node * schema, const char *path, int flags,
                            sch_node ** rschema, xpath_type *x_type, char *schema_path);
