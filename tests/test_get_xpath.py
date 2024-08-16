@@ -1,4 +1,4 @@
-from conftest import _get_test_with_filter, apteryx_set, apteryx_proxy, _get_test_with_filter_expect_error
+from conftest import _get_test_with_filter, apteryx_set, apteryx_proxy, apteryx_prune, _get_test_with_filter_expect_error
 
 
 # GET XPATH
@@ -6235,6 +6235,101 @@ def test_get_xpath_proxy_list_select_one_trunk():
       </test>
     </logical-element>
   </logical-elements>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_when_derived_from():
+    apteryx_set("/test/animals/animal/cat/n-type", "big")
+    xpath = "/test/animals/animal[name='cat']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+        <n-type>big</n-type>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_when_condition_true():
+    apteryx_set("/test/animals/animal/wombat/name", "wombat")
+    apteryx_set("/test/animals/animal/cat/claws", "5")
+    xpath = "/test/animals/animal[name='cat']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+        <claws>5</claws>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_when_condition_false():
+    apteryx_set("/test/animals/animal/cat/claws", "5")
+    xpath = "/test/animals/animal[name='cat']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_must_condition_true():
+    apteryx_set("/test/animals/animal/dog/friend", "ben")
+    xpath = "/test/animals/animal[name='dog']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+        <friend>ben</friend>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_must_condition_false():
+    apteryx_set("/test/animals/animal/dog/friend", "ben")
+    apteryx_prune("/test/animals/animal/cat")
+    xpath = "/test/animals/animal[name='dog']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(xpath, expected, f_type='xpath')

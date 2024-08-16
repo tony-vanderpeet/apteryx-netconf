@@ -80,6 +80,12 @@ GMutex session_lock;
 /* Global statistics */
 global_statistics_t netconf_global_stats;
 
+sch_instance *
+netconf_get_g_schema (void)
+{
+    return g_schema;
+}
+
 static void
 _set_xmlns (xmlNode* node)
 {
@@ -1941,6 +1947,20 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         }
     }
 
+    for (iter = sch_parm_conditions (parms); iter; iter = g_list_next (iter))
+    {
+        GList *next = g_list_next (iter);
+
+        if (next && !sch_process_condition (g_schema, tree, (char *) iter->data, (char *) next->data))
+        {
+            ret = send_rpc_error_full (session, rpc, NC_ERR_TAG_INVALID_VAL, NC_ERR_TYPE_PROTOCOL, NULL, NULL, NULL, true);
+            sch_parm_free (parms);
+            apteryx_free_tree (tree);
+            return ret;
+        }
+        iter = next;
+    }
+
     /* Edit database */
     DEBUG ("NETCONF: SET %s need_set %d\n", tree ? APTERYX_NAME (tree) : "NULL", sch_parm_need_tree_set (parms));
     if (tree && sch_parm_need_tree_set (parms) && !apteryx_set_tree (tree))
@@ -2735,6 +2755,9 @@ netconf_init (const char *path, const char *supported,  const char *cp, const ch
     apteryx_watch (NETCONF_SESSION_STATUS, _netconf_clear_session);
     apteryx_watch (NETCONF_CONFIG_MAX_SESSIONS, _netconf_max_sessions);
     apteryx_set_int (NETCONF_STATE, "max-sessions", netconf_max_sessions);
+
+    /* Register with the YANG condition parser */
+    sch_condition_register (apteryx_netconf_debug, apteryx_netconf_verbose);
 
     return true;
 }

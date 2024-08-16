@@ -175,6 +175,7 @@ typedef enum
 /* Schema */
 typedef struct _sch_instance sch_instance;
 typedef void sch_node;
+sch_instance *netconf_get_g_schema (void);
 xmlNode *sch_gnode_to_xml (sch_instance * instance, sch_node * schema, GNode * node, int flags);
 sch_xml_to_gnode_parms sch_xml_to_gnode (sch_instance * instance, sch_node * schema,
                                          xmlNode * xml, int flags, char * def_op,
@@ -186,6 +187,7 @@ GList *sch_parm_removes (sch_xml_to_gnode_parms parms);
 GList *sch_parm_creates (sch_xml_to_gnode_parms parms);
 GList *sch_parm_replaces (sch_xml_to_gnode_parms parms);
 GList *sch_parm_merges (sch_xml_to_gnode_parms parms);
+GList *sch_parm_conditions (sch_xml_to_gnode_parms parms);
 bool sch_parm_need_tree_set (sch_xml_to_gnode_parms parms);
 void sch_parm_free (sch_xml_to_gnode_parms parms);
 GNode *sch_xpath_to_gnode (sch_instance * instance, sch_node * schema, const char *path, int flags,

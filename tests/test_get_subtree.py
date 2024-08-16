@@ -1,7 +1,7 @@
 import pytest
 from ncclient.xml_ import to_ele
 from lxml import etree
-from conftest import connect, _get_test_with_filter, apteryx_set, apteryx_proxy
+from conftest import connect, _get_test_with_filter, apteryx_set, apteryx_proxy, apteryx_prune
 
 
 def test_get_subtree_no_filter():
@@ -754,6 +754,151 @@ def test_get_subtree_proxy_named_element():
       </test>
     </logical-element>
   </logical-elements>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_if_feature():
+    apteryx_set("/test/animals/animal/cat/friend", "smokey")
+    apteryx_set("/test/animals/animal/cat/claws", "5")
+    select = '<test><animals/></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+        <friend>smokey</friend>
+      </animal>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+      <animal>
+        <name>hamster</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
+        <food>
+          <name>banana</name>
+          <type>fruit</type>
+        </food>
+        <food>
+          <name>nuts</name>
+          <type>kibble</type>
+        </food>
+      </animal>
+      <animal>
+        <name>mouse</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:little</type>
+        <colour>grey</colour>
+      </animal>
+      <animal>
+        <name>parrot</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+        <colour>blue</colour>
+        <toys>
+          <toy>puzzles</toy>
+          <toy>rings</toy>
+        </toys>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_when_derived_from():
+    apteryx_set("/test/animals/animal/cat/n-type", "big")
+    select = '<test><animals><animal><name>cat</name></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+        <n-type>big</n-type>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_when_condition_true():
+    apteryx_set("/test/animals/animal/wombat/name", "wombat")
+    apteryx_set("/test/animals/animal/cat/claws", "5")
+    select = '<test><animals><animal><name>cat</name></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+        <claws>5</claws>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_when_condition_false():
+    apteryx_set("/test/animals/animal/cat/claws", "5")
+    select = '<test><animals><animal><name>cat</name></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_must_condition_true():
+    apteryx_set("/test/animals/animal/dog/friend", "ben")
+    select = '<test><animals><animal><name>dog</name></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+        <friend>ben</friend>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_must_condition_false():
+    apteryx_set("/test/animals/animal/dog/friend", "ben")
+    apteryx_prune("/test/animals/animal/cat")
+    select = '<test><animals><animal><name>dog</name></animal></animals></test>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>dog</name>
+        <colour>brown</colour>
+      </animal>
+    </animals>
+  </test>
 </nc:data>
     """
     _get_test_with_filter(select, expected)
