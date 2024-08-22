@@ -1,7 +1,7 @@
 import pytest
 from ncclient.operations import RPCError
 from lxml import etree
-from conftest import connect
+from conftest import connect, apteryx_set, apteryx_proxy
 
 # EDIT-CONFIG
 
@@ -623,3 +623,87 @@ def test_edit_config_empty_delete():
     xml = _edit_config_test(payload, post_xpath='/test/settings/enable')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
     assert etree.XPath("//text()")(xml) == []
+
+
+def test_edit_config_proxy_named_element():
+    apteryx_set("/logical-elements/logical-element/loop/name", "loopy")
+    apteryx_set("/logical-elements/logical-element/loop/root", "root")
+    apteryx_set("/apteryx/sockets/E18FE205",  "tcp://127.0.0.1:9999")
+    apteryx_proxy("/logical-elements/logical-element/loopy/*", "tcp://127.0.0.1:9999")
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-elements>
+    <logical-element>
+      <name>loopy</name>
+      <test>
+        <animals>
+          <animal>
+              <name>parrot</name>
+              <toys>
+                <toy xc:operation="create">bell</toy>
+              </toys>
+          </animal>
+        </animals>
+      </test>
+    </logical-element>
+  </logical-elements>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test/animals/animal/parrot/toys", inc_str=["bell"])
+
+
+def test_edit_config_proxy_named_element_read_only():
+    apteryx_set("/logical-elements/logical-element-ro/loop/name", "loopy")
+    apteryx_set("/logical-elements/logical-element-ro/loop/root", "root")
+    apteryx_set("/apteryx/sockets/E18FE205",  "tcp://127.0.0.1:9999")
+    apteryx_proxy("/logical-elements/logical-element-ro/loopy/*", "tcp://127.0.0.1:9999")
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-elements>
+    <logical-element-ro>
+      <name>loopy</name>
+      <test>
+        <animals>
+          <animal>
+              <name>parrot</name>
+              <toys>
+                <toy xc:operation="create">bell</toy>
+              </toys>
+          </animal>
+        </animals>
+      </test>
+    </logical-element-ro>
+  </logical-elements>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_proxy_remove_leaf_list_item_read_only():
+    apteryx_set("/logical-elements/logical-element-ro/loop/name", "loopy")
+    apteryx_set("/logical-elements/logical-element-ro/loop/root", "root")
+    apteryx_set("/apteryx/sockets/E18FE205",  "tcp://127.0.0.1:9999")
+    apteryx_proxy("/logical-elements/logical-element-ro/loopy/*", "tcp://127.0.0.1:9999")
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <logical-elements>
+    <logical-element-ro>
+      <name>loopy</name>
+        <test>
+          <animals>
+              <animal>
+                  <name>parrot</name>
+                  <toys>
+                    <toy xc:operation="remove">rings</toy>
+                  </toys>
+              </animal>
+          </animals>
+        </test>
+    </logical-element-ro>
+  </logical-elements>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
