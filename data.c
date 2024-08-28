@@ -513,6 +513,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     bool key_valid = false;
     bool ret_tree = false;
     bool is_proxy = false;
+    bool read_only = false;
 
     /* Detect change in namespace */
     if (xml->ns && xml->ns->href)
@@ -530,6 +531,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
         if (!child)
         {
             is_proxy = sch_is_proxy (schema);
+            read_only = sch_is_read_only_proxy (schema);
         }
     }
 
@@ -551,6 +553,13 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                ns ? sch_ns_prefix (instance, ns) : "", ns ? ":" : "", name);
         _parms->out_error.tag = NC_ERR_TAG_MALFORMED_MSG;
         _parms->out_error.type = NC_ERR_TYPE_RPC;
+        return NULL;
+    }
+    if (_parms->in_is_edit && read_only)
+    {
+        DEBUG ("Invalid operation\n");
+        _parms->out_error.tag = NC_ERR_TAG_INVALID_VAL;
+        _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
         return NULL;
     }
     if (rschema)
