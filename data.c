@@ -1282,6 +1282,10 @@ _sch_xpath_to_gnode (sch_instance * instance, sch_node ** rschema, sch_node ** v
             pred = g_strdup (pred);
             free (name);
             name = temp;
+
+            /* Numeric predicates to a record offset must be evaluated */
+            if (isdigit (pred[1]))
+                *x_type = XPATH_EVALUATE;
         }
 
         if (schema && vschema && *vschema == NULL && sch_is_list (schema))
