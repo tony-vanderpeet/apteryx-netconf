@@ -33,6 +33,7 @@ typedef struct _sch_xml_to_gnode_parms_s
     GList *out_creates;
     GList *out_replaces;
     GList *out_merges;
+    GList *conditions;
 } _sch_xml_to_gnode_parms;
 
 static bool
@@ -114,6 +115,40 @@ sch_node_find_name (sch_instance *instance, xmlNs *ns, sch_node *parent, const c
     return found;
 }
 
+static void
+sch_check_condition_parms (_sch_xml_to_gnode_parms *_parms, sch_node *node, char *new_xpath)
+{
+    xmlChar *when_clause = xmlGetProp ((xmlNode *) node, BAD_CAST "when");
+    xmlChar *must_clause = xmlGetProp ((xmlNode *) node, BAD_CAST "must");
+    xmlChar *if_feature = xmlGetProp ((xmlNode *) node, BAD_CAST "if-feature");
+
+    if (when_clause)
+    {
+        _parms->conditions = g_list_append (_parms->conditions, g_strdup (new_xpath));
+        _parms->conditions = g_list_append (_parms->conditions, g_strdup ((char *) when_clause));
+        DEBUG ("when_clause <%s - %s>\n", new_xpath, when_clause);
+        xmlFree (when_clause);
+    }
+
+    if (must_clause)
+    {
+        _parms->conditions = g_list_append (_parms->conditions, g_strdup (new_xpath));
+        _parms->conditions = g_list_append (_parms->conditions, g_strdup ((char *) must_clause));
+        DEBUG ("must_clause <%s - %s>\n", new_xpath, must_clause);
+        xmlFree (must_clause);
+    }
+
+    if (if_feature)
+    {
+        _parms->conditions = g_list_append (_parms->conditions, g_strdup (new_xpath));
+        _parms->conditions = g_list_append (_parms->conditions,
+                                                 g_strdup_printf ("if-feature(%s)", (char *) if_feature));
+        DEBUG("if_feature <%s - %s>\n", new_xpath, if_feature);
+        xmlFree (if_feature);
+    }
+}
+
+
 static xmlNode *
 _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNode * parent,
                    GNode * node, int flags, int depth)
@@ -122,6 +157,8 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
     xmlNode *data = NULL;
     char *colon = NULL;
     char *name;
+    char *condition = NULL;
+    char *path = NULL;
 
     /* Get the actual node name */
     if (depth == 0 && strlen (APTERYX_NAME (node)) == 1)
@@ -208,6 +245,21 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
                ns ? sch_ns_prefix (instance, ns) : "", ns ? ":" : "", name);
         free (name);
         return NULL;
+    }
+
+    flags |= SCH_F_CONDITIONS;
+    sch_check_condition (schema, node, flags, &path, &condition);
+    if (condition)
+    {
+        if (!sch_process_condition (netconf_get_g_schema (), node, path, condition))
+        {
+            g_free (condition);
+            g_free (path);
+            free (name);
+            return NULL;
+        }
+        g_free (condition);
+        g_free (path);
     }
 
     if (sch_is_leaf_list (schema))
@@ -588,6 +640,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     {
         char *old_xpath = new_xpath;
         char *key_value = NULL;
+        sch_node *parent = schema;
 
         DEBUG ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
         tree = APTERYX_NODE (NULL, g_strdup (name));
@@ -595,6 +648,9 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
 
         if (xml_node_has_content (xml))
         {
+            if (_parms->in_is_edit)
+                sch_check_condition_parms (_parms, parent, new_xpath);
+
             key_value = (char *) xmlNodeGetContent (xml);
             if (g_strcmp0 (new_op, "delete") == 0 || g_strcmp0 (new_op, "remove") == 0 ||
                 g_strcmp0 (new_op, "none") == 0)
@@ -664,6 +720,10 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
             DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
             key_value = g_strdup ("*");
         }
+
+        if (_parms->in_is_edit)
+            sch_check_condition_parms (_parms, schema, new_xpath);
+
         schema = sch_node_child_first (schema);
         if (rschema)
             *rschema = schema;
@@ -677,6 +737,8 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
     {
         DEBUG ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
         tree = node = APTERYX_NODE (NULL, g_strdup_printf ("%s%s", depth ? "" : "/", name));
+        if (_parms->in_is_edit)
+            sch_check_condition_parms (_parms, schema, new_xpath);
     }
     /* LEAF */
     else
@@ -730,6 +792,10 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                     tree = NULL;
                     goto exit;
                 }
+
+                if (_parms->in_is_edit)
+                    sch_check_condition_parms (_parms, schema, new_xpath);
+
                 /* Test for RFC6241 section 6.2.5 compliance */
                 sch_parent = sch_node_parent (sch_node_parent (schema));
                 if (!_parms->in_is_edit && sch_parent && sch_is_list (sch_parent))
@@ -888,6 +954,7 @@ sch_parms_init (sch_instance * instance, int flags, char * def_op, bool is_edit)
     _parms->out_creates = NULL;
     _parms->out_replaces = NULL;
     _parms->out_merges = NULL;
+    _parms->conditions = NULL;
     return _parms;
 }
 
@@ -990,6 +1057,18 @@ sch_parm_merges (sch_xml_to_gnode_parms parms)
     return _parms->out_merges;
 }
 
+GList *
+sch_parm_conditions (sch_xml_to_gnode_parms parms)
+{
+    _sch_xml_to_gnode_parms *_parms = parms;
+
+    if (!_parms)
+    {
+        return NULL;
+    }
+    return _parms->conditions;
+}
+
 bool
 sch_parm_need_tree_set (sch_xml_to_gnode_parms parms)
 {
@@ -1015,6 +1094,7 @@ sch_parm_free (sch_xml_to_gnode_parms parms)
         g_list_free_full (_parms->out_creates, g_free);
         g_list_free_full (_parms->out_replaces, g_free);
         g_list_free_full (_parms->out_merges, g_free);
+        g_list_free_full (_parms->conditions, g_free);
         _parms->out_error.tag = 0;
         _parms->out_error.type = 0;
         g_string_free (_parms->out_error.msg, TRUE);

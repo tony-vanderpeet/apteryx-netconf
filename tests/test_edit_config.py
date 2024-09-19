@@ -221,7 +221,7 @@ def test_edit_config_delete_trunk():
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
         xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <test>
-    <settings xc:operation="delete" />
+    <settings xc:operation="delete"/>
   </test>
 </config>
 """
@@ -704,6 +704,266 @@ def test_edit_config_proxy_remove_leaf_list_item_read_only():
         </test>
     </logical-element-ro>
   </logical-elements>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_if_feature_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <magictime>
+        <days>1</days>
+      </magictime>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_if_feature_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <testtime>
+        <days>1</days>
+      </testtime>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/testtime/days')
+    assert xml.find('./{*}test/{*}settings/{*}testtime/{*}days').text == '1'
+
+
+def test_edit_config_if_feature_or_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <testtime>
+        <hours>2</hours>
+      </testtime>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/testtime/hours')
+    assert xml.find('./{*}test/{*}settings/{*}testtime/{*}hours').text == '2'
+
+
+def test_edit_config_if_feature_or_or_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <testtime>
+        <minutes>10</minutes>
+      </testtime>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/testtime/minutes')
+    assert xml.find('./{*}test/{*}settings/{*}testtime/{*}minutes').text == '10'
+
+
+def test_edit_config_if_feature_or_or_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <testtime>
+        <seconds>20</seconds>
+      </testtime>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_create_when_condition_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>dog</name>
+            <houses>
+              <house xc:operation="create">kennel</house>
+            </houses>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test/animals/animal[name='dog']", inc_str=["kennel"])
+
+
+def test_edit_config_create_when_condition_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>cat</name>
+            <houses>
+              <house xc:operation="create">cat house</house>
+            </houses>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_when_condition_true():
+    apteryx_set("/test/animals/animal/wombat/name", "wombat")
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>cat</name>
+            <claws>5</claws>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test/animals/animal[name='cat']", inc_str=["5"])
+
+
+def test_edit_config_when_condition_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>cat</name>
+            <claws>5</claws>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_when_name_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <complextime>
+        <hours>7</hours>
+      </complextime>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/complextime/hours')
+    assert xml.find('./{*}test/{*}settings/{*}complextime/{*}hours').text == '7'
+
+
+def test_edit_config_when_name_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <complextime>
+        <minutes>6</minutes>
+      </complextime>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_when_count_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <complextime>
+        <seconds>9</seconds>
+      </complextime>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/complextime/seconds')
+    assert xml.find('./{*}test/{*}settings/{*}complextime/{*}seconds').text == '9'
+
+
+def test_edit_config_when_path_exists():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <complextime>
+        <days>2</days>
+      </complextime>
+    </settings>
+  </test>
+</config>
+"""
+    xml = _edit_config_test(payload, post_xpath='/test/settings/complextime/days')
+    assert xml.find('./{*}test/{*}settings/{*}complextime/{*}days').text == '2'
+
+
+def test_edit_config_must_condition_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>dog</name>
+            <friend>ben</friend>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test/animals/animal[name='dog']", inc_str=["ben"])
+
+
+def test_edit_config_must_condition_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal xc:operation="delete">
+        <name>cat</name>
+      </animal>
+      <animal>
+        <name>dog</name>
+        <friend xc:operation="merge">ben</friend>
+      </animal>
+    </animals>
+  </test>
 </config>
 """
     _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
