@@ -6333,3 +6333,20 @@ def test_get_xpath_must_condition_false():
 </nc:data>
     """
     _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_list_trunk_predicate_one():
+    xpath = '/test/animals/animal[1]'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test xmlns="http://test.com/ns/yang/testing">
+    <animals>
+      <animal>
+        <name>cat</name>
+        <type xmlns="http://test.com/ns/yang/animal-types">a-types:big</type>
+      </animal>
+    </animals>
+  </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
