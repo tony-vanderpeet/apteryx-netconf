@@ -268,6 +268,41 @@ _free_error_parms (nc_error_parms error_parms)
     g_hash_table_destroy (error_parms.info);
 }
 
+static GList*
+generate_apteryx_query_node_paths (GNode *query, GString* qpath, GList *paths)
+{
+    if (!query)
+        return paths;
+
+    const gchar* qname = (const gchar*) query->data;
+    if (qname)
+        g_string_append_printf (qpath, "%s/", qname);
+
+    if (g_node_n_children (query) == 0)
+    {
+       /* Remove trailing slash if it exists */
+       if (qpath->len > 0 && qpath->str[qpath->len - 1] == '/')
+            g_string_truncate (qpath, qpath->len - 1);
+
+        paths = g_list_append (paths, g_strdup (qpath->str));
+    }
+
+    GNode *child = g_node_first_child (query);
+    while (child)
+    {
+        GString *child_path = g_string_new (qpath->str);
+        paths = generate_apteryx_query_node_paths (child, child_path, paths);
+        g_string_free (child_path, TRUE);
+
+        child = g_node_next_sibling (child);
+    }
+
+    /* Remove trailing slash if it exists */
+    if (qpath->len > 0 && qpath->str[qpath->len - 1] == '/')
+        g_string_truncate (qpath, qpath->len - 1);
+
+    return paths;
+}
 
 /* Close open sessions */
 void
@@ -1277,10 +1312,16 @@ get_query_to_xml (struct netconf_session *session, xmlNode *rpc, GNode *query,
     if (((logging & LOG_GET) && !(schflags & SCH_F_CONFIG)) ||
         ((logging & LOG_GET_CONFIG) && (schflags & SCH_F_CONFIG)))
     {
-        NOTICE ("%s: %s@%s id:%d path:%s\n",
-                (schflags & SCH_F_CONFIG) ? "GET-CONFIG" : "GET",
-                session->username, session->rem_addr, session->id,
-                query ? APTERYX_NAME (query) : "/");
+        GString *qpath = g_string_new ("./");
+        GList *paths = generate_apteryx_query_node_paths (query, qpath, NULL);
+        for (GList *iter = paths; iter; iter = iter->next)
+            NOTICE ("%s: %s@%s id:%u path:%s\n",
+                    (schflags & SCH_F_CONFIG) ? "GET-CONFIG" : "GET",
+                    session->username, session->rem_addr, session->id,
+                    (gchar*) iter->data);
+
+        g_list_free_full (paths, g_free);
+        g_string_free (qpath, TRUE);
     }
 
     if (query)
@@ -1554,7 +1595,7 @@ get_process_action (struct netconf_session *session, xmlNode *rpc, xmlNode *node
                 qschema = NULL;
                 parms =
                     sch_xml_to_gnode (g_schema, NULL, tnode, schflags | SCH_F_STRIP_KEY, "merge",
-                                      false, &qschema);
+                                      false, &qschema, NULL);
                 query = sch_parm_tree (parms);
                 sch_parm_free (parms);
                 if (!query)
@@ -1827,6 +1868,7 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     char *exists;
     bool ret = false;
     char *def_op = NULL;
+    char *new_op = NULL;
 
     if (apteryx_netconf_verbose)
         schflags |= SCH_F_DEBUG;
@@ -1878,7 +1920,8 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
     /* Convert to gnode */
     parms =
         sch_xml_to_gnode (g_schema, NULL, xmlFirstElementChild (node), schflags, def_op,
-                          true, &qschema);
+                          true, &qschema, &new_op);
+
     tree = sch_parm_tree (parms);
 
     nc_error_parms error_parms = sch_parm_error (parms);
@@ -1996,9 +2039,9 @@ handle_edit (struct netconf_session *session, xmlNode * rpc)
         for (iter = sch_parm_merges (parms); iter; iter = g_list_next (iter))
         {
             value = split_path_value ((char *) iter->data);
-            NOTICE ("EDIT-CONFIG: %s@%s id:%d merge:%s=%s\n",
+            NOTICE ("EDIT-CONFIG: %s@%s id:%d %s:%s=%s\n",
                     session->username, session->rem_addr, session->id,
-                    (char *) iter->data, value);
+                    new_op ?: "merge", (char *) iter->data, value);
         }
     }
 

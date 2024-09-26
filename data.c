@@ -550,7 +550,7 @@ _perform_actions (_sch_xml_to_gnode_parms *_parms, int depth, char *curr_op, cha
 
 static GNode *
 _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *ns, char * part_xpath,
-                   char * curr_op, GNode * pparent, xmlNode * xml, int depth, sch_node **rschema)
+                   char * curr_op, GNode * pparent, xmlNode * xml, int depth, sch_node **rschema, char ** edit_op)
 {
     sch_instance *instance = _parms->in_instance;
     int flags = _parms->in_flags;
@@ -634,6 +634,9 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
         free (name);
         return NULL;
     }
+
+    if (edit_op && new_op)
+        *edit_op = new_op;
 
     /* LIST */
     if (sch_is_leaf_list (schema))
@@ -890,7 +893,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
         }
         else
         {
-            GNode *cn = _sch_xml_to_gnode (_parms, schema, ns, new_xpath, new_op, NULL, child, depth + 1, rschema);
+            GNode *cn = _sch_xml_to_gnode (_parms, schema, ns, new_xpath, new_op, NULL, child, depth + 1, rschema, edit_op);
             if (_parms->out_error.tag)
             {
                 apteryx_free_tree (tree);
@@ -960,13 +963,13 @@ sch_parms_init (sch_instance * instance, int flags, char * def_op, bool is_edit)
 
 sch_xml_to_gnode_parms
 sch_xml_to_gnode (sch_instance * instance, sch_node * schema, xmlNode * xml, int flags,
-                  char * def_op, bool is_edit, sch_node **rschema)
+                  char * def_op, bool is_edit, sch_node **rschema, char ** edit_op)
 {
     _sch_xml_to_gnode_parms *_parms = sch_parms_init(instance, flags, def_op, is_edit);
 
     if (xml)
         _parms->out_tree = _sch_xml_to_gnode (_parms, schema, NULL, "", def_op, NULL, xml, 0,
-                                              rschema);
+                                              rschema, edit_op);
     else
     {
         _parms->out_error.tag = NC_ERR_TAG_INVALID_VAL;
