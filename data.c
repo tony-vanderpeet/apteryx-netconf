@@ -264,6 +264,7 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
 
     if (sch_is_leaf_list (schema))
     {
+        xmlNode *prev = NULL;
         apteryx_sort_children (node, g_strcmp0);
         for (GNode * child = node->children; child; child = child->next)
         {
@@ -271,22 +272,30 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
             if (value_node)
             {
                 char *leaf_name = APTERYX_NAME (value_node);
-                data = xmlNewNode (NULL, BAD_CAST name);
-                xmlNodeSetContent (data, (const xmlChar *) leaf_name);
+                xmlNode *list_data = xmlNewNode (NULL, BAD_CAST name);
+                xmlNodeSetContent (list_data, (const xmlChar *) leaf_name);
                 sch_ns *sns = sch_node_ns (schema);
                 if (!pschema || !sch_ns_match (pschema, sns))
                 {
                     const xmlChar *href = (const xmlChar *) sch_ns_href (instance, sns);
-                    xmlNsPtr nns = xmlNewNs (data, href, NULL);
-                    xmlSetNs (data, nns);
+                    xmlNsPtr nns = xmlNewNs (list_data, href, NULL);
+                    xmlSetNs (list_data, nns);
                 }
-                xmlAddChildList (parent, data);
+                if (parent)
+                    xmlAddChildList (parent, list_data);
+                else if (prev)
+                    prev = xmlAddSibling (prev, list_data);
+                else
+                    prev = list_data;
+                if (!data)
+                    data = list_data;
                 DEBUG ("%*s%s = %s\n", depth * 2, " ", APTERYX_NAME (node), leaf_name);
             }
         }
     }
     else if (sch_is_list (schema))
     {
+        xmlNode *prev = NULL;
         xmlNode *list_data = NULL;
         data = NULL;
 
@@ -298,6 +307,13 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
             DEBUG ("%*s%s[%s]\n", depth * 2, " ", APTERYX_NAME (node),
                    APTERYX_NAME (child));
             list_data = xmlNewNode (NULL, BAD_CAST name);
+            sch_ns *sns = sch_node_ns (schema);
+            if (!pschema || !sch_ns_match (pschema, sns))
+            {
+                const xmlChar *href = (const xmlChar *) sch_ns_href (instance, sns);
+                xmlNsPtr nns = xmlNewNs (list_data, href, NULL);
+                xmlSetNs (list_data, nns);
+            }
             sch_gnode_sort_children (sch_node_child_first (schema), child);
             for (GNode * field = child->children; field; field = field->next)
             {
@@ -331,8 +347,14 @@ _sch_gnode_to_xml (sch_instance * instance, sch_node * schema, sch_ns *ns, xmlNo
                         g_free (key);
                     }
                 }
-                xmlAddChildList (parent, list_data);
-                data = list_data;
+                if (parent)
+                    xmlAddChildList (parent, list_data);
+                else if (prev)
+                    prev = xmlAddSibling (prev, list_data);
+                else
+                    prev = list_data;
+                if (!data)
+                    data = list_data;
             }
             else
             {
@@ -646,7 +668,7 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
         sch_node *parent = schema;
 
         DEBUG ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
-        tree = APTERYX_NODE (NULL, g_strdup (name));
+        tree = APTERYX_NODE (NULL, g_strdup_printf ("%s%s", depth ? "" : "/", name));
         schema = sch_node_child_first (schema);
 
         if (xml_node_has_content (xml))
@@ -691,8 +713,8 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
 
         key = sch_name (sch_node_child_first (sch_node_child_first (schema)));
         DEBUG ("%*s%s%s\n", depth * 2, " ", depth ? "" : "/", name);
+        tree = node = APTERYX_NODE (NULL, g_strdup_printf ("%s%s", depth ? "" : "/", name));
         depth++;
-        tree = node = APTERYX_NODE (NULL, g_strdup (name));
         attr = (char *) xmlGetProp (xml, BAD_CAST key);
         if (attr)
         {
@@ -1423,7 +1445,6 @@ _sch_xpath_to_gnode (sch_instance * instance, sch_node ** rschema, sch_node ** v
                 else
                     rnode = APTERYX_NODE (NULL, g_strdup_printf ("/%s", name));
             }
-            DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (rnode));
         }
         else
         {
@@ -1437,7 +1458,6 @@ _sch_xpath_to_gnode (sch_instance * instance, sch_node ** rschema, sch_node ** v
         {
             char key[128 + 1];
             char value[128 + 1];
-
             schema = sch_node_child_first (schema);
             if (sscanf (pred, "[%128[^=]='%128[^']']", key, value) == 2 ||
                 sscanf (pred, "[%128[^=]=\"%128[^\"]\"]", key, value) == 2) {
