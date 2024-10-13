@@ -137,6 +137,19 @@ def test_edit_config_list():
     _edit_config_test(payload, post_xpath="/test/animals", inc_str=["frog"])
 
 
+def test_edit_config_toplevel_list():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test-list>
+    <index>1</index>
+    <name>frog</name>
+  </test-list>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test-list", inc_str=["frog"])
+
+
 def test_edit_config_list_key_colon():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
@@ -259,6 +272,20 @@ def test_edit_config_delete_list():
 </config>
 """
     _edit_config_test(payload, post_xpath="/test/animals", exc_str=["cat"])
+
+
+def test_edit_config_delete_toplevel_list():
+    apteryx_set("/test-list/1/index", "1")
+    apteryx_set("/test-list/1/name", "cat")
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test-list xc:operation="delete">
+    <index>1</index>
+  </test-list>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test-list", exc_str=["cat"])
 
 
 def test_edit_config_delete_leaf_list_item():
@@ -520,6 +547,16 @@ def test_edit_config_create_leaf_list_item():
     _edit_config_test(payload, post_xpath="/test/animals/animal/parrot/toys", inc_str=["bell"])
 
 
+def test_edit_config_create_toplevel_leaf_list_item():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test-leaflist xmlns="http://test.com/ns/yang/testing" xc:operation="create">bell</test-leaflist>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test-leaflist", inc_str=["bell"])
+
+
 # EDIT-CONFIG (operation=remove)
 #  remove:  The configuration data identified by the element
 #     containing this attribute is deleted from the configuration
@@ -577,6 +614,17 @@ def test_edit_config_remove_leaf_list_item():
 </config>
 """
     _edit_config_test(payload, post_xpath="/test/animals/animal/parrot/toys", inc_str=["puzzles"], exc_str=["rings"])
+
+
+def test_edit_config_remove_toplevel_leaf_list_item():
+    apteryx_set("/test-leaflist/cat", "cat")
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test-leaflist xmlns="http://test.com/ns/yang/testing" xc:operation="remove">cat</test-leaflist>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test-leaflist", exc_str=["cat"])
 
 
 # Empty value for nodes that have a non-empty pattern or values

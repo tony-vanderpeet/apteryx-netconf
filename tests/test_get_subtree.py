@@ -254,6 +254,34 @@ def test_get_subtree_list_container():
     _get_test_with_filter(select, expected)
 
 
+def test_get_subtree_toplevel_list():
+    apteryx_set("/test-list/1/index", "1")
+    apteryx_set("/test-list/1/name", "cat")
+    select = '<test-list/>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test-list xmlns="http://test.com/ns/yang/testing">
+      <index>1</index>
+      <name>cat</name>
+    </test-list>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
+def test_get_subtree_toplevel_leaflist():
+    apteryx_set("/test-leaflist/cat", "cat")
+    apteryx_set("/test-leaflist/dog", "dog")
+    select = '<test-leaflist/>'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test-leaflist xmlns="http://test.com/ns/yang/testing">cat</test-leaflist>
+    <test-leaflist xmlns="http://test.com/ns/yang/testing">dog</test-leaflist>
+</nc:data>
+    """
+    _get_test_with_filter(select, expected)
+
+
 def test_get_subtree_list_element():
     select = '<test><animals><animal/></animals></test>'
     expected = """

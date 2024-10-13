@@ -235,6 +235,48 @@ def test_get_xpath_list_trunk():
     _get_test_with_filter(xpath, expected, f_type='xpath')
 
 
+def test_get_xpath_toplevel_list_all():
+    apteryx_set("/test-list/1/index", "1")
+    apteryx_set("/test-list/1/name", "cat")
+    apteryx_set("/test-list/3/index", "3")
+    apteryx_set("/test-list/3/name", "mouse")
+    apteryx_set("/test-list/2/index", "2")
+    apteryx_set("/test-list/2/name", "dog")
+    xpath = '/test-list'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test-list xmlns="http://test.com/ns/yang/testing">
+      <index>1</index>
+      <name>cat</name>
+    </test-list>
+    <test-list xmlns="http://test.com/ns/yang/testing">
+      <index>2</index>
+      <name>dog</name>
+    </test-list>
+    <test-list xmlns="http://test.com/ns/yang/testing">
+      <index>3</index>
+      <name>mouse</name>
+    </test-list>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_toplevel_leaflist():
+    apteryx_set("/test-leaflist/cat", "cat")
+    apteryx_set("/test-leaflist/mouse", "mouse")
+    apteryx_set("/test-leaflist/dog", "dog")
+    xpath = '/test-leaflist'
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test-leaflist xmlns="http://test.com/ns/yang/testing">cat</test-leaflist>
+    <test-leaflist xmlns="http://test.com/ns/yang/testing">dog</test-leaflist>
+    <test-leaflist xmlns="http://test.com/ns/yang/testing">mouse</test-leaflist>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
 def test_get_xpath_list_select_one_trunk():
     xpath = "/test/animals/animal[name='cat']"
     expected = """
@@ -247,6 +289,23 @@ def test_get_xpath_list_select_one_trunk():
             </animal>
         </animals>
     </test>
+</nc:data>
+    """
+    _get_test_with_filter(xpath, expected, f_type='xpath')
+
+
+def test_get_xpath_toplevel_list_select_one():
+    apteryx_set("/test-list/1/index", "1")
+    apteryx_set("/test-list/1/name", "cat")
+    apteryx_set("/test-list/2/index", "2")
+    apteryx_set("/test-list/2/name", "dog")
+    xpath = "/test-list[index='2']"
+    expected = """
+<nc:data xmlns:nc="urn:ietf:params:xml:ns:netconf:base:1.0">
+    <test-list xmlns="http://test.com/ns/yang/testing">
+      <index>2</index>
+      <name>dog</name>
+    </test-list>
 </nc:data>
     """
     _get_test_with_filter(xpath, expected, f_type='xpath')
