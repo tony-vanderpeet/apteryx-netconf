@@ -162,6 +162,12 @@ db_default = [
     ('/alphabet/A/X/Z/post', '24'),
     ('/alphabet/A/X/Z/idrefs', 'n8 n17'),
     ('/alphabet/A/X/Z/word', 'zuzzurellone'),
+    # Some users, various list and leaf-list tests
+    ('/test/settings/users/bob/name', 'bob'),
+    ('/test/settings/users/bob/age', '34'),
+    ('/test/settings/users/bob/active', 'true'),
+    ('/test/settings/users/bob/groups/2', '2'),
+    ('/test/settings/users/bob/groups/23', '23'),
 ]
 
 

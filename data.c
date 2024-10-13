@@ -677,6 +677,17 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                 sch_check_condition_parms (_parms, parent, new_xpath);
 
             key_value = (char *) xmlNodeGetContent (xml);
+            if (_parms->in_is_edit && !sch_validate_pattern (schema, key_value))
+            {
+                DEBUG ("Invalid value \"%s\" for node \"%s\"\n", key_value, name);
+                g_free (key_value);
+                apteryx_free_tree (tree);
+                _parms->out_error.tag = NC_ERR_TAG_INVALID_VAL;
+                _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
+                tree = NULL;
+                goto exit;
+            }
+
             if (g_strcmp0 (new_op, "delete") == 0 || g_strcmp0 (new_op, "remove") == 0 ||
                 g_strcmp0 (new_op, "none") == 0)
             {

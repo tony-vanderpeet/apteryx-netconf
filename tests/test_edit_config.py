@@ -339,7 +339,7 @@ def test_edit_config_merge_delete():
 """
     xml = _edit_config_test(payload, post_xpath='/test/settings')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', 'false', '1']
+    assert etree.XPath("//text()")(xml) == ['enable', 'false', 'bob', '34', 'true', '2', '23', '1']
 
 
 # EDIT-CONFIG (operation=replace)
@@ -1015,3 +1015,39 @@ def test_edit_config_must_condition_false():
 </config>
 """
     _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_leaf_list_invalid_value():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <users>
+        <name>bob</name>
+        <groups>admin</groups>
+        <groups>software</groups>
+      </users>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
+def test_edit_config_leaf_list_valid_value():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <users>
+        <name>bob</name>
+        <groups>123</groups>
+        <groups>321</groups>
+      </users>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath='/test/settings/users[name="bob"]', inc_str=['123', '321'])
