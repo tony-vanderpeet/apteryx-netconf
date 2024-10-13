@@ -180,6 +180,13 @@ def test_get_xpath_trunk():
             <debug>enable</debug>
             <enable>true</enable>
             <priority>1</priority>
+            <users>
+                <name>bob</name>
+                <age>34</age>
+                <active>true</active>
+                <groups>2</groups>
+                <groups>23</groups>
+            </users>
             <volume>1</volume>
         </settings>
     </test>
