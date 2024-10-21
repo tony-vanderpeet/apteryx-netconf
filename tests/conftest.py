@@ -168,6 +168,8 @@ db_default = [
     ('/test/settings/users/bob/active', 'true'),
     ('/test/settings/users/bob/groups/2', '2'),
     ('/test/settings/users/bob/groups/23', '23'),
+    ('/test/settings/users/bob/groups/24', '24'),
+    ('/test/settings/users/bob/groups/25', '25'),
 ]
 
 

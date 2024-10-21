@@ -2,6 +2,15 @@ import pytest
 from ncclient.operations import RPCError
 from lxml import etree
 from conftest import connect, apteryx_set, apteryx_proxy
+import xmltodict
+
+settings_filter = """
+<test>
+    <settings>
+    </settings>
+</test>
+"""
+
 
 # EDIT-CONFIG
 
@@ -43,6 +52,19 @@ def _edit_config_test(payload, expect_err=None, post_xpath=None, targ="running",
     finally:
         m.close_session()
     return xml
+
+
+def _get_subtree_as_dict(f_value, wd=None):
+    """
+    Get data from the model based on subtree (without root node) and return
+    the data as a json like dict:
+    """
+    m = connect()
+    xml = m.get(filter=('subtree', f_value), with_defaults=wd).data
+    xml_str = etree.tostring(xml, pretty_print=True, encoding="unicode")
+    ret = xmltodict.parse(xml_str)
+    m.close_session()
+    return ret
 
 
 def test_edit_config_node():
@@ -394,7 +416,7 @@ def test_edit_config_merge_delete():
 """
     xml = _edit_config_test(payload, post_xpath='/test/settings')
     print(etree.tostring(xml, pretty_print=True, encoding="unicode"))
-    assert etree.XPath("//text()")(xml) == ['enable', 'false', 'bob', '34', 'true', '2', '23', '1']
+    assert etree.XPath("//text()")(xml) == ['enable', 'false', 'bob', '34', 'true', '2', '23', '24', '25', '1']
 
 
 # EDIT-CONFIG (operation=replace)
@@ -1125,3 +1147,161 @@ def test_edit_config_leaf_list_valid_value():
 </config>
 """
     _edit_config_test(payload, post_xpath='/test/settings/users[name="bob"]', inc_str=['123', '321'])
+
+
+# A series of tests to help verify the tree merging when multiple leaf-list values appear in an
+# edit-config request.
+
+def _make_group_payload(add_list=None, delete_list=None):
+    """
+    Create edit-config payload for groups tests. There can be merges and deletes.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <users>
+        <name>bob</name>
+"""
+    if add_list:
+        for gv in add_list:
+            payload += f'<groups>{gv}</groups>'
+    if delete_list:
+        for gv in delete_list:
+            payload += f'<groups xc:operation="delete">{gv}</groups>'
+    payload += '</users></settings></test></config>'
+    return payload
+
+
+def _check_groups(group_list):
+    """
+    Verify that groups in list match groups in database.
+    """
+    filter = """
+<test>
+    <settings>
+        <users>
+            <name>bob</name>
+        </users>
+    </settings>
+</test>
+"""
+    gst = _get_subtree_as_dict(filter)
+    print(gst)
+    try:
+        groups = gst['nc:data']['test']['settings']['users']['groups']
+        if type(groups) == list:
+            assert groups == list(group_list)
+        else:
+            assert len(group_list) == 1 and groups == group_list[0]
+    except Exception as e:
+        raise e
+
+
+def test_edit_config_leaf_list_merge():
+    """
+    Add two groups to the list, verify all groups appear in final result.
+    """
+    payload = _make_group_payload(add_list=(43, 45))
+    print(payload)
+    _edit_config_test(payload)
+    _check_groups(('2', '23', '24', '25', '43', '45'))
+
+
+def test_edit_config_leaf_list_delete():
+    """
+    Delete two groups from the list.
+    """
+    payload = _make_group_payload(delete_list=(23, 24, 25))
+    _edit_config_test(payload)
+    _check_groups(('2', ))
+
+
+def test_edit_config_leaf_list_merge_and_delete():
+    """
+    Add some, delete some groups.
+    """
+    payload = _make_group_payload(add_list=(43, 45), delete_list=(24, 25))
+    _edit_config_test(payload)
+    _check_groups(('2', '23', '43', '45'))
+
+
+def test_edit_users_add_three():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+      <users>
+        <name>jill</name>
+        <groups>123</groups>
+        <groups>321</groups>
+      </users>
+      <users>
+        <name>jack</name>
+        <groups>123</groups>
+        <groups>321</groups>
+      </users>
+      <users>
+        <name>mary</name>
+        <groups>123</groups>
+        <groups>321</groups>
+      </users>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload)
+
+
+def test_edit_config_merge_container_without_sibling():
+    """
+    When building the GNode tree the two settings containers will be
+    merged, but each of them only has one child.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+        <priority>5</priority>
+    </settings>
+    <settings>
+        <debug>disable</debug>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload)
+    gst = _get_subtree_as_dict(settings_filter)
+    settings = gst['nc:data']['test']['settings']
+    assert 'priority' in settings
+    assert 'debug' in settings
+
+
+def test_edit_config_merge_container_with_sibling():
+    """
+    When building the GNode tree the two settings containers will be
+    merged, but the second one has siblings.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <settings>
+        <priority>5</priority>
+    </settings>
+    <settings>
+        <debug>disable</debug>
+        <description>How can I describe this...</description>
+    </settings>
+  </test>
+</config>
+"""
+    _edit_config_test(payload)
+    gst = _get_subtree_as_dict(settings_filter)
+    settings = gst['nc:data']['test']['settings']
+    assert 'priority' in settings
+    assert 'debug' in settings
+    assert 'description' in settings

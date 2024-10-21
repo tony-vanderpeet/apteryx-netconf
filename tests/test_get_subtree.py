@@ -190,6 +190,8 @@ def test_get_subtree_trunk():
                 <active>true</active>
                 <groups>2</groups>
                 <groups>23</groups>
+                <groups>24</groups>
+                <groups>25</groups>
             </users>
             <volume>1</volume>
         </settings>

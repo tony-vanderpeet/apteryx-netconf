@@ -956,7 +956,33 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
             if (cn)
             {
                 if (node)
-                    g_node_append (node, cn);
+                {
+                    GNode *sub_node;
+                    GNode *sub_cn;
+                    GNode *next_sub_cn = NULL;
+
+                    /* If we already have a child matching the top of the new data, add the data to that
+                     * node so we don't get multiple entries at any level.
+                     * If the data is NULL, just ignore the new data.
+                     */
+                    if ((sub_node = apteryx_find_child (node, cn->data)) != NULL)
+                    {
+                        for (sub_cn = cn->children; sub_cn; sub_cn = next_sub_cn)
+                        {
+                            next_sub_cn = sub_cn->next;
+                            sub_cn->parent = NULL;
+                            sub_cn->next = NULL;
+                            sub_cn->prev = NULL;
+                            g_node_append (sub_node, sub_cn);
+                        }
+                        cn->children = NULL;
+                        apteryx_free_tree (cn);
+                    }
+                    else
+                    {
+                        g_node_append (node, cn);
+                    }
+                }
                 else
                     tree = cn;
                 ret_tree = true;
