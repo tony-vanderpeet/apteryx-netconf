@@ -1055,6 +1055,44 @@ def test_edit_config_when_path_exists():
     assert xml.find('./{*}test/{*}settings/{*}complextime/{*}days').text == '2'
 
 
+def test_edit_config_when_condition_translate_true():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>cat</name>
+            <cages>
+              <cage>box</cage>
+            </cages>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath="/test/animals/animal[name='cat']", inc_str=["box"])
+
+
+def test_edit_config_when_condition_translate_false():
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+        <animal>
+            <name>mouse</name>
+            <cages>
+              <cage>box</cage>
+            </cages>
+        </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "invalid-value", "type": "protocol"})
+
+
 def test_edit_config_must_condition_true():
     payload = """
 <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"

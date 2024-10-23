@@ -69,6 +69,7 @@ typedef enum
     LOG_KILL_SESSION            = (1 << 3),  /* Log kill-session requests */
     LOG_LOCK                    = (1 << 4),  /* Log lock requests */
     LOG_UNLOCK                  = (1 << 5),  /* Log unlock requests */
+    LOG_CLOSE_SESSION           = (1 << 6),  /* Log close-session requests */
 } logging_flags;
 
 /* Define session counters from the RFC 6022 /netconf-state/sessions group
