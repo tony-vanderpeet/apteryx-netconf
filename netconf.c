@@ -2716,6 +2716,9 @@ netconf_handle_session (int fd)
         if (g_strcmp0 ((char *) child->name, "close-session") == 0)
         {
             VERBOSE ("Closing session\n");
+            if ((logging & LOG_CLOSE_SESSION))
+                NOTICE ("CLOSE-SESSION: %s@%s id:%d closed\n",
+                        session->username, session->rem_addr, session->id);
             send_rpc_ok (session, rpc, true);
             xmlFreeDoc (doc);
             g_free (message);

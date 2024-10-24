@@ -67,6 +67,8 @@ load_logging_options (void)
                     flags |= LOG_LOCK;
                 else if (g_strcmp0 (split[i], "unlock") == 0)
                     flags |= LOG_UNLOCK;
+                else if (g_strcmp0 (split[i], "close-session") == 0)
+                    flags |= LOG_CLOSE_SESSION;
             }
             g_strfreev (split);
         }
