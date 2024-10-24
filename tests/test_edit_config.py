@@ -669,7 +669,7 @@ def test_edit_config_remove_missing_data():
   </test>
 </config>
 """
-    _edit_config_test(payload, expect_err={"tag": "malformed-message", "type": "rpc"})
+    _edit_config_test(payload, expect_err={"tag": "missing-attribute", "type": "protocol"})
 
 
 def test_edit_config_remove_leaf_list_item():
@@ -1126,3 +1126,42 @@ def test_edit_config_leaf_list_valid_value():
 </config>
 """
     _edit_config_test(payload, post_xpath='/test/settings/users[name="bob"]', inc_str=['123', '321'])
+
+
+def test_edit_config_list_missing_index():
+    """
+    Set merge for new animal without an index, expect an error.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal>
+        <type>little</type>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, expect_err={"tag": "missing-attribute", "type": "protocol"})
+
+
+def test_edit_config_list_out_of_order_index():
+    """
+    Set merge for new animal with an index, just not the first part of the message.
+    """
+    payload = """
+<config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0"
+        xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <test>
+    <animals>
+      <animal>
+        <type>little</type>
+        <name>gerbil</name>
+      </animal>
+    </animals>
+  </test>
+</config>
+"""
+    _edit_config_test(payload, post_xpath='/test/animals/animal[name="gerbil"]', inc_str=['gerbil', 'a-types:little'])
