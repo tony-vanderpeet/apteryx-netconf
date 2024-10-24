@@ -588,6 +588,21 @@ _perform_actions (_sch_xml_to_gnode_parms *_parms, int depth, char *curr_op, cha
     }
 }
 
+static char *
+_xml_to_gnode_find_key (xmlNode * xml, char * key)
+{
+    xmlNode *iter;
+
+    for (iter = xmlFirstElementChild (xml); iter; iter = xmlNextElementSibling (iter))
+    {
+        if (g_strcmp0 ((const char *) iter->name, key) == 0 && xml_node_has_content (iter))
+        {
+            return (char *) xmlNodeGetContent (iter);
+        }
+    }
+    return NULL;
+}
+
 static GNode *
 _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *ns, char * part_xpath,
                    char * curr_op, GNode * pparent, xmlNode * xml, int depth, sch_node **rschema, char ** edit_op)
@@ -760,21 +775,34 @@ _sch_xml_to_gnode (_sch_xml_to_gnode_parms *_parms, sch_node * schema, sch_ns *n
                     g_node_prepend_data (_node, NULL);
             }
         }
-        else if (xmlFirstElementChild (xml) &&
-                 g_strcmp0 ((const char *) xmlFirstElementChild (xml)->name, key) == 0 &&
-                 xml_node_has_content (xmlFirstElementChild (xml)))
-        {
-            char *content = (char *) xmlNodeGetContent (xmlFirstElementChild (xml));
-            key_value = _sch_key_encode (content);
-            free (content);
-            node = APTERYX_NODE (node, key_value);
-            DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
-        }
         else
         {
-            key_value = g_strdup ("*");
-            node = APTERYX_NODE (node, key_value);
-            DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
+            char *content = _xml_to_gnode_find_key (xml, key);
+
+            if (content == NULL)
+            {
+                if (_parms->in_is_edit)
+                {
+                    apteryx_free_tree (tree);
+                    _parms->out_error.tag = NC_ERR_TAG_MISSING_ATTR;
+                    _parms->out_error.type = NC_ERR_TYPE_PROTOCOL;
+                    tree = NULL;
+                    goto exit;
+                }
+                else
+                {
+                    key_value = g_strdup ("*");
+                    node = APTERYX_NODE (node, key_value);
+                    DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
+                }
+            }
+            else
+            {
+                key_value = _sch_key_encode (content);
+                free (content);
+                node = APTERYX_NODE (node, key_value);
+                DEBUG ("%*s%s\n", depth * 2, " ", APTERYX_NAME (node));
+            }
         }
 
         if (_parms->in_is_edit)
